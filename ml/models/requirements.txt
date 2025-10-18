@@ -1,0 +1,30 @@
+# Model Training Dependencies
+# Python 3.9+
+
+# Core ML frameworks
+torch>=2.0.0
+transformers>=4.30.0
+accelerate>=0.26.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
+
+# Tokenization
+sentencepiece>=0.1.99
+
+# Model evaluation
+seaborn>=0.12.0
+matplotlib>=3.7.0
+
+# Utilities
+tqdm>=4.65.0
+datasets>=2.14.0
+
+# Model tracking (optional)
+mlflow>=2.5.0
+
+# Jupyter for development (optional)
+jupyter>=1.0.0
+ipykernel>=6.23.0

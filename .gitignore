@@ -1,0 +1,130 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Environment variables
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ML Models (large files)
+ml/models/*/checkpoint-*/
+ml/models/*/*.bin
+ml/models/*/*.safetensors
+ml/models/*/pytorch_model.bin
+ml/models/*/model.safetensors
+
+# Keep model metadata and config
+!ml/models/*/config.json
+!ml/models/*/metadata.json
+
+# Datasets (can be large)
+ml/dataset/raw/*.csv
+ml/dataset/labeled/*.csv
+ml/dataset/splits/*.csv
+
+# Keep small example datasets
+!ml/dataset/labeled/*_sample.csv
+!ml/dataset/labeled/*_example.csv
+
+# Backfill data
+producers/reddit_producer/backfill/data/*.csv
+producers/reddit_producer/backfill/logs/*.log
+producers/reddit_producer/backfill/checkpoints/*.json
+producers/reddit_producer/backfill/cache/*
+
+# Spark checkpoints and temp
+spark/checkpoints/
+spark/metastore_db/
+spark/derby.log
+spark/.spark-warehouse/
+/tmp/spark*
+
+# Airflow
+airflow/logs/
+airflow/*.db
+airflow/*.pid
+airflow/airflow.cfg
+airflow/webserver_config.py
+
+# Docker volumes data
+.volumes/
+volumes/
+
+# Grafana
+grafana/data/
+
+# Cassandra data
+cassandra/data/
+
+# Kafka data
+kafka/data/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Test outputs
+test_output/
+test-results/
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Documentation builds
+docs/_build/
+site/

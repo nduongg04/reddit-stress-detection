@@ -1,0 +1,46 @@
+reddit:
+  subreddits:
+    - anxiety
+    - depression
+    - stress
+    - mentalhealth
+  stream_types:
+    - submissions
+    - comments
+  skip_existing: true
+
+kafka:
+  bootstrap_servers:
+    - kafka:9092
+  topic: reddit.posts.raw.v1
+  dlq_topic: reddit.posts.dlq.v1
+
+producer:
+  max_retries: 3
+  retry_backoff_ms: 1000
+  request_timeout_ms: 30000
+
+rate_limiting:
+  requests_per_minute: 60
+  burst_limit: 10
+
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - [%(correlation_id)s] - %(levelname)s - %(message)s"
+
+error_handling:
+  retry:
+    max_attempts: 5
+    base_delay_seconds: 1.0
+    max_delay_seconds: 60.0
+    jitter_factor: 0.5
+
+  circuit_breaker:
+    failure_threshold: 5
+    recovery_timeout_seconds: 60
+    success_threshold: 2
+
+  dlq:
+    enabled: true
+    write_local_fallback: true
+    local_fallback_dir: logs/dlq_fallback

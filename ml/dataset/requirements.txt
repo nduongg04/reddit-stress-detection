@@ -1,0 +1,18 @@
+# Dataset Collection & Labeling Requirements
+
+# Core data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Machine learning utilities
+scikit-learn>=1.3.0
+
+# Cassandra database
+cassandra-driver>=3.28.0
+
+# Labeling UI
+streamlit>=1.28.0
+
+# Optional: Advanced labeling
+# label-studio>=1.9.0
+# label-studio-sdk>=0.0.30

@@ -1,0 +1,19 @@
+# Grafana Datasource Provisioning Configuration
+# Auto-configures Cassandra datasource on Grafana startup
+
+apiVersion: 1
+
+datasources:
+  - name: Cassandra
+    type: hadesarchitect-cassandra-datasource
+    access: proxy
+    uid: cassandra_datasource
+    isDefault: true
+    editable: true
+    jsonData:
+      host: cassandra
+      port: 9042
+      keyspace: reddit_rt
+      consistency: ONE
+      timeout: 10
+    version: 1
