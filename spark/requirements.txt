@@ -1,0 +1,27 @@
+# Spark Streaming Application Dependencies
+
+# Kafka integration
+pyspark==3.5.0
+
+# Cassandra integration
+cassandra-driver==3.29.2
+# Required for cassandra-driver with Python 3.13+ (asyncore removed)
+eventlet>=0.33.0
+
+# Data processing
+pandas>=2.2.0
+
+# Schema validation
+pydantic>=2.4.0
+
+# Retry logic
+tenacity>=8.2.3
+
+# Metrics
+prometheus-client>=0.19.0
+
+# Configuration
+pyyaml>=6.0.1
+
+# NumPy (required by pandas, ensure compatibility)
+numpy>=1.26.0

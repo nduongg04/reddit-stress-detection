@@ -1,0 +1,43 @@
+cassandra:
+  # Contact points
+  contact_points:
+    - "cassandra"  # Dev environment (Docker service name)
+    # For production, add multiple contact points:
+    # - "cassandra1.prod.com"
+    # - "cassandra2.prod.com"
+    # - "cassandra3.prod.com"
+
+  # Port
+  port: 9042
+
+  # Keyspace
+  keyspace: "reddit_rt"
+
+  # Authentication (optional)
+  auth:
+    enabled: false
+    username: "cassandra_user"
+    password: "cassandra_password"
+
+  # Connection settings
+  connection:
+    connections_per_host: 2
+    keep_alive: true
+    timeout_ms: 30000
+    retry_policy: "DowngradingConsistencyRetryPolicy"
+
+  # Write settings
+  write:
+    consistency_level: "LOCAL_QUORUM"
+    batch_size_bytes: 16384
+    batch_buffer_size: 1000
+    parallelism: 4
+    throughput_mb_per_sec: 512
+
+  # SSL settings (production)
+  ssl:
+    enabled: false
+    keystore_path: "/path/to/keystore"
+    keystore_password: "password"
+    truststore_path: "/path/to/truststore"
+    truststore_password: "password"

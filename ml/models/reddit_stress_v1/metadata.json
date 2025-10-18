@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "model_name": "distilbert-base-uncased",
+  "training_date": "2025-10-18T23:53:52.131131",
+  "training_samples": 560,
+  "validation_samples": 120,
+  "test_samples": 120,
+  "hyperparameters": {
+    "num_epochs": 3,
+    "batch_size": 16,
+    "learning_rate": 2e-05,
+    "max_length": 512
+  },
+  "metrics": {
+    "train_loss": 0.6524722258249919,
+    "val_accuracy": 0.7,
+    "val_precision": 0.7068965517241379,
+    "val_recall": 0.6833333333333333,
+    "val_f1": 0.6949152542372882,
+    "test_accuracy": 0.7,
+    "test_precision": 0.7068965517241379,
+    "test_recall": 0.6833333333333333,
+    "test_f1": 0.6949152542372882
+  },
+  "targets_met": false,
+  "dataset_version": "1.0.0"
+}

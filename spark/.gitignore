@@ -1,0 +1,22 @@
+# Spark artifacts
+checkpoints/
+metastore_db/
+derby.log
+spark-warehouse/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+*.egg-info/
+
+# Test data
+data/*.parquet
+data/*.json
+data/*.csv
+
+# Logs
+*.log
