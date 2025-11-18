@@ -1,0 +1,44 @@
+# Custom Spark Image with ML Libraries for Real-Time Stress Detection
+FROM apache/spark:3.5.0
+
+USER root
+
+# Install pip and upgrade it, then install ML dependencies
+# Note: Using --no-deps and manual dependency installation to avoid hf-xet ARM64 issues
+RUN apt-get update && apt-get install -y python3-pip && \
+    pip3 install --upgrade pip && \
+    pip3 install --no-cache-dir \
+    numpy \
+    regex \
+    requests \
+    tqdm \
+    pyyaml \
+    filelock \
+    fsspec \
+    typing-extensions \
+    packaging && \
+    pip3 install --no-cache-dir \
+    torch==2.0.1 && \
+    pip3 install --no-cache-dir \
+    tokenizers==0.14.1 \
+    safetensors==0.4.0 && \
+    pip3 install --no-cache-dir --no-deps \
+    "huggingface-hub==0.19.4" && \
+    pip3 install --no-cache-dir --no-deps \
+    transformers==4.35.0 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Create directories for ML models and apps
+RUN mkdir -p /opt/ml/models /opt/spark-apps
+
+# Pre-download Spark packages to avoid runtime download issues
+RUN /opt/spark/bin/spark-submit --packages com.datastax.spark:spark-cassandra-connector_2.12:3.5.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 --help || true
+
+# Copy ML model (v4) into the image
+COPY ml/models/reddit_stress_v4 /opt/ml/models/reddit_stress_v4
+
+# Copy Spark streaming applications
+COPY spark/kafka_to_cassandra_with_ml_docker.py /opt/spark-apps/kafka_to_cassandra_with_ml.py
+COPY spark/model_inference.py /opt/spark-apps/model_inference.py
+
+WORKDIR /opt/spark-apps

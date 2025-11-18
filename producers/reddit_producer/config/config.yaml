@@ -8,10 +8,11 @@ reddit:
     - submissions
     - comments
   skip_existing: true
+  posts_per_minute: 10  # Max posts to fetch per minute (to avoid rate limiting)
 
 kafka:
   bootstrap_servers:
-    - kafka:9092
+    - localhost:29092  # Use kafka:9092 when inside Docker, localhost:29092 when running outside Docker
   topic: reddit.posts.raw.v1
   dlq_topic: reddit.posts.dlq.v1
 

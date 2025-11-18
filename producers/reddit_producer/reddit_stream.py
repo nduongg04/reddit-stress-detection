@@ -76,11 +76,16 @@ class RedditStream:
         self.submission_count = 0
         self.comment_count = 0
         self.skip_existing = config['reddit'].get('skip_existing', True)
+        self.posts_per_minute = config['reddit'].get('posts_per_minute', 10)
         self.shutdown_event = None  # Will be set from main
+
+        # Track processed post IDs to avoid duplicates
+        self.processed_ids = set()
 
         logger.info(
             f"Reddit stream initialized for r/{self.subreddit_str}, "
-            f"skip_existing={self.skip_existing}"
+            f"skip_existing={self.skip_existing}, "
+            f"posts_per_minute={self.posts_per_minute}"
         )
 
     @retry(
@@ -90,86 +95,123 @@ class RedditStream:
     )
     def stream_submissions(self):
         """
-        Stream new submissions from subreddits
+        Fetch new submissions from subreddits with rate limiting
 
-        This method runs indefinitely and processes new submissions as they appear
+        This method runs indefinitely and fetches posts_per_minute posts every minute
         """
-        logger.info(f"Starting submission stream for r/{self.subreddit_str}")
+        logger.info(
+            f"Starting submission stream for r/{self.subreddit_str} "
+            f"(fetching up to {self.posts_per_minute} posts/minute)"
+        )
 
         try:
-            for submission in self.subreddit.stream.submissions(
-                skip_existing=self.skip_existing,
-                pause_after=-1
-            ):
-                if submission is None:
-                    # No new submissions, wait a bit
-                    time.sleep(1)
-                    continue
+            while True:
+                # Calculate delay between fetches
+                delay_seconds = 60.0 / self.posts_per_minute if self.posts_per_minute > 0 else 6.0
 
-                # Set correlation ID for tracing
-                correlation_id = set_correlation_id()
+                # Fetch latest submissions (limit to posts_per_minute)
+                logger.debug(f"Fetching up to {self.posts_per_minute} new submissions...")
 
-                try:
-                    # Respect rate limits
-                    self.rate_limiter.wait_if_needed()
+                submissions = list(self.subreddit.new(limit=self.posts_per_minute))
 
-                    # Transform submission to standard format
-                    post_data = transform_submission(submission)
-                    post_data['correlation_id'] = correlation_id
+                processed_this_batch = 0
 
-                    # Validate post data
-                    if validate_post(post_data):
-                        # Send to Kafka with circuit breaker protection
-                        try:
-                            self.circuit_breaker.call(
-                                self.kafka_producer.send_message,
-                                message=post_data,
-                                key=post_data['post_id']
+                for submission in submissions:
+                    # Skip if already processed
+                    if submission.id in self.processed_ids:
+                        continue
+
+                    # Add to processed set
+                    self.processed_ids.add(submission.id)
+
+                    # Limit the size of processed_ids to prevent memory issues
+                    if len(self.processed_ids) > 10000:
+                        # Remove oldest 5000 entries
+                        self.processed_ids = set(list(self.processed_ids)[-5000:])
+
+                    # Set correlation ID for tracing
+                    correlation_id = set_correlation_id()
+
+                    try:
+                        # Respect rate limits
+                        self.rate_limiter.wait_if_needed()
+
+                        # Transform submission to standard format
+                        post_data = transform_submission(submission)
+                        post_data['correlation_id'] = correlation_id
+
+                        # Validate post data
+                        if validate_post(post_data):
+                            # Send to Kafka with circuit breaker protection
+                            try:
+                                self.circuit_breaker.call(
+                                    self.kafka_producer.send_message,
+                                    message=post_data,
+                                    key=post_data['post_id']
+                                )
+
+                                self.post_count += 1
+                                self.submission_count += 1
+                                processed_this_batch += 1
+
+                                logger.info(
+                                    f"Published submission {submission.id} from r/{submission.subreddit.display_name} "
+                                    f"to Kafka (batch: {processed_this_batch}/{len(submissions)})"
+                                )
+
+                                if self.submission_count % 10 == 0:
+                                    logger.info(
+                                        f"Total processed: {self.submission_count} submissions "
+                                        f"({self.post_count} total posts)"
+                                    )
+
+                                    # Log rate limiter stats
+                                    stats = self.rate_limiter.get_stats()
+                                    logger.info(
+                                        f"API Rate: {stats['current_requests_per_minute']}/60 req/min "
+                                        f"({stats['utilization_percent']:.1f}% utilized)"
+                                    )
+
+                                    # Update circuit breaker state metric
+                                    update_circuit_breaker_state(self.circuit_breaker.get_state())
+
+                            except Exception as kafka_error:
+                                record_error(kafka_error, "kafka_send")
+                                self.kafka_producer.send_to_dlq(post_data, kafka_error, correlation_id)
+
+                        else:
+                            logger.warning(
+                                f"Invalid submission: {post_data.get('post_id', 'unknown')}, "
+                                f"subreddit: {post_data.get('subreddit', 'unknown')}"
                             )
+                            self.kafka_producer.send_to_dlq(post_data, "validation_failed", correlation_id)
 
-                            self.post_count += 1
-                            self.submission_count += 1
+                    except Exception as e:
+                        logger.error(f"Error processing submission {submission.id}: {e}", exc_info=True)
+                        record_error(e, "submission_processing")
+                        # Continue processing next submission
+                        continue
 
-                            if self.submission_count % 10 == 0:
-                                logger.info(
-                                    f"Processed {self.submission_count} submissions "
-                                    f"(total: {self.post_count} posts)"
-                                )
+                    finally:
+                        clear_correlation_id()
 
-                                # Log rate limiter stats
-                                stats = self.rate_limiter.get_stats()
-                                logger.info(
-                                    f"API Rate: {stats['current_requests_per_minute']}/60 req/min "
-                                    f"({stats['utilization_percent']:.1f}% utilized)"
-                                )
+                    # Check for shutdown signal
+                    if self.shutdown_event and self.shutdown_event.is_set():
+                        logger.info("Shutdown signal received, stopping submission stream")
+                        return
 
-                                # Update circuit breaker state metric
-                                update_circuit_breaker_state(self.circuit_breaker.get_state())
+                # Log batch summary
+                if processed_this_batch > 0:
+                    logger.info(
+                        f"Batch complete: {processed_this_batch} new posts published "
+                        f"(skipped {len(submissions) - processed_this_batch} duplicates)"
+                    )
+                else:
+                    logger.debug(f"No new posts in this batch ({len(submissions)} checked)")
 
-                        except Exception as kafka_error:
-                            record_error(kafka_error, "kafka_send")
-                            self.kafka_producer.send_to_dlq(post_data, kafka_error, correlation_id)
-
-                    else:
-                        logger.warning(
-                            f"Invalid submission: {post_data.get('post_id', 'unknown')}, "
-                            f"subreddit: {post_data.get('subreddit', 'unknown')}"
-                        )
-                        self.kafka_producer.send_to_dlq(post_data, "validation_failed", correlation_id)
-
-                except Exception as e:
-                    logger.error(f"Error processing submission {submission.id}: {e}", exc_info=True)
-                    record_error(e, "submission_processing")
-                    # Continue processing next submission
-                    continue
-
-                finally:
-                    clear_correlation_id()
-
-                # Check for shutdown signal
-                if self.shutdown_event and self.shutdown_event.is_set():
-                    logger.info("Shutdown signal received, stopping submission stream")
-                    break
+                # Wait before next batch (spread posts evenly across the minute)
+                logger.debug(f"Waiting {delay_seconds:.1f}s before next batch...")
+                time.sleep(delay_seconds)
 
         except Exception as e:
             logger.error(f"Fatal error in submission stream: {e}", exc_info=True)

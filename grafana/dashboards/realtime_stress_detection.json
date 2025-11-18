@@ -1,0 +1,441 @@
+{
+  "dashboard": {
+    "title": "Real-Time Stress Detection Dashboard",
+    "tags": ["stress", "ml", "real-time"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Real-Time Stress Detection Rate",
+        "type": "stat",
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "rawQuery": true,
+            "query": "SELECT pct_stress FROM reddit_rt.agg_global_hour WHERE hour_partition = '${__from:date:YYYY-MM-DD-HH}' ALLOW FILTERING",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "unit": "percent"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 30, "color": "yellow" },
+                { "value": 60, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Total Posts Processed (Last Hour)",
+        "type": "stat",
+        "gridPos": {
+          "x": 6,
+          "y": 0,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "rawQuery": true,
+            "query": "SELECT total_cnt FROM reddit_rt.agg_global_hour WHERE hour_partition = '${__from:date:YYYY-MM-DD-HH}' ALLOW FILTERING",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        }
+      },
+      {
+        "id": 3,
+        "title": "Stress Count (Last Hour)",
+        "type": "stat",
+        "gridPos": {
+          "x": 12,
+          "y": 0,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "rawQuery": true,
+            "query": "SELECT stress_cnt FROM reddit_rt.agg_global_hour WHERE hour_partition = '${__from:date:YYYY-MM-DD-HH}' ALLOW FILTERING",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 50, "color": "yellow" },
+                { "value": 100, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Average Stress Score",
+        "type": "gauge",
+        "gridPos": {
+          "x": 18,
+          "y": 0,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "rawQuery": true,
+            "query": "SELECT avg_score FROM reddit_rt.agg_global_hour WHERE hour_partition = '${__from:date:YYYY-MM-DD-HH}' ALLOW FILTERING",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showThresholdLabels": false,
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "value": 0, "color": "green" },
+                { "value": 0.5, "color": "yellow" },
+                { "value": 0.7, "color": "red" }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Stress Detection by Subreddit (Last Hour)",
+        "type": "table",
+        "gridPos": {
+          "x": 0,
+          "y": 4,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "rawQuery": true,
+            "query": "SELECT subreddit, total_cnt, stress_cnt, pct_stress, avg_score FROM reddit_rt.agg_subreddit_hour WHERE hour_partition = '${__from:date:YYYY-MM-DD-HH}' ALLOW FILTERING",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "displayName": "stress_cnt",
+              "desc": true
+            }
+          ]
+        },
+        "fieldConfig": {
+          "overrides": [
+            {
+              "matcher": { "id": "byName", "options": "pct_stress" },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "percent"
+                },
+                {
+                  "id": "custom.displayMode",
+                  "value": "color-background"
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      { "value": 0, "color": "green" },
+                      { "value": 30, "color": "yellow" },
+                      { "value": 60, "color": "red" }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "matcher": { "id": "byName", "options": "avg_score" },
+              "properties": [
+                {
+                  "id": "custom.displayMode",
+                  "value": "gradient-gauge"
+                },
+                {
+                  "id": "min",
+                  "value": 0
+                },
+                {
+                  "id": "max",
+                  "value": 1
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 6,
+        "title": "Recent High-Stress Posts",
+        "type": "table",
+        "gridPos": {
+          "x": 12,
+          "y": 4,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "rawQuery": true,
+            "query": "SELECT subreddit, title, stress_score, created_utc FROM reddit_rt.classified_posts_by_hour WHERE stress_label = true AND hour_partition = '${__from:date:YYYY-MM-DD-HH}' ALLOW FILTERING LIMIT 50",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "displayName": "stress_score",
+              "desc": true
+            }
+          ]
+        },
+        "fieldConfig": {
+          "overrides": [
+            {
+              "matcher": { "id": "byName", "options": "stress_score" },
+              "properties": [
+                {
+                  "id": "custom.displayMode",
+                  "value": "color-background"
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      { "value": 0.5, "color": "yellow" },
+                      { "value": 0.7, "color": "orange" },
+                      { "value": 0.9, "color": "red" }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 7,
+        "title": "Stress Trend Over Time",
+        "type": "timeseries",
+        "gridPos": {
+          "x": 0,
+          "y": 12,
+          "w": 24,
+          "h": 8
+        },
+        "targets": [
+          {
+            "rawQuery": true,
+            "query": "SELECT hour_partition, pct_stress, stress_cnt, total_cnt FROM reddit_rt.agg_global_hour WHERE hour_partition >= '${__from:date:YYYY-MM-DD-HH}' AND hour_partition <= '${__to:date:YYYY-MM-DD-HH}' ALLOW FILTERING",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "tooltip": {
+            "mode": "multi"
+          },
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 10,
+              "showPoints": "auto"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": { "id": "byName", "options": "pct_stress" },
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "Stress Percentage"
+                },
+                {
+                  "id": "unit",
+                  "value": "percent"
+                },
+                {
+                  "id": "color",
+                  "value": {
+                    "mode": "fixed",
+                    "fixedColor": "red"
+                  }
+                }
+              ]
+            },
+            {
+              "matcher": { "id": "byName", "options": "stress_cnt" },
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "Stress Count"
+                },
+                {
+                  "id": "custom.axisPlacement",
+                  "value": "right"
+                }
+              ]
+            },
+            {
+              "matcher": { "id": "byName", "options": "total_cnt" },
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "Total Posts"
+                },
+                {
+                  "id": "custom.axisPlacement",
+                  "value": "right"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 8,
+        "title": "Model Performance",
+        "type": "stat",
+        "gridPos": {
+          "x": 0,
+          "y": 20,
+          "w": 8,
+          "h": 4
+        },
+        "targets": [
+          {
+            "rawQuery": true,
+            "query": "SELECT model_version FROM reddit_rt.classified_posts_by_hour WHERE hour_partition = '${__from:date:YYYY-MM-DD-HH}' LIMIT 1 ALLOW FILTERING",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "textMode": "value"
+        }
+      },
+      {
+        "id": 9,
+        "title": "Processing Latency",
+        "type": "stat",
+        "gridPos": {
+          "x": 8,
+          "y": 20,
+          "w": 8,
+          "h": 4
+        },
+        "description": "Average time between post creation and ML processing",
+        "targets": [
+          {
+            "rawQuery": true,
+            "query": "SELECT processed_ts, created_utc FROM reddit_rt.classified_posts_by_hour WHERE hour_partition = '${__from:date:YYYY-MM-DD-HH}' LIMIT 100 ALLOW FILTERING",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "unit": "s"
+        },
+        "transformations": [
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "latency",
+              "mode": "reduceRow",
+              "reduce": {
+                "reducer": "mean"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Posts Processed (Real-Time Counter)",
+        "type": "stat",
+        "gridPos": {
+          "x": 16,
+          "y": 20,
+          "w": 8,
+          "h": 4
+        },
+        "targets": [
+          {
+            "rawQuery": true,
+            "query": "SELECT COUNT(*) FROM reddit_rt.classified_posts_by_hour WHERE hour_partition = '${__from:date:YYYY-MM-DD-HH}' ALLOW FILTERING",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        }
+      }
+    ],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["10s", "30s", "1m", "5m"]
+    }
+  },
+  "overwrite": true
+}

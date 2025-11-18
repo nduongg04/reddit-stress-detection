@@ -1,0 +1,12 @@
+source_file: ml/dataset/labeled/reddit_crawl_ollama_labeled.csv
+total_samples: 2572
+train_samples: 1800
+val_samples: 386
+test_samples: 386
+filter_confidence: HIGH
+exclude_unknown: True
+train_ratio: 0.7
+val_ratio: 0.15
+test_ratio: 0.15
+random_state: 42
+class_distribution: {'stress': 2163, 'non_stress': 409}
