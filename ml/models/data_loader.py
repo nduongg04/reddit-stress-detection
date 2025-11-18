@@ -18,14 +18,16 @@ logger = logging.getLogger(__name__)
 class StressDataset:
     """Dataset loader for stress detection training"""
 
-    def __init__(self, data_dir: str = "ml/dataset/splits"):
+    def __init__(self, data_dir: str = "ml/dataset/splits", file_suffix: str = ""):
         """
         Initialize dataset loader
 
         Args:
             data_dir: Directory containing train/val/test splits
+            file_suffix: Optional suffix for file names (e.g., "_v2" for train_v2.csv)
         """
         self.data_dir = Path(data_dir)
+        self.file_suffix = file_suffix
         self.train_df = None
         self.val_df = None
         self.test_df = None
@@ -39,9 +41,9 @@ class StressDataset:
         """
         logger.info(f"Loading data from {self.data_dir}")
 
-        train_path = self.data_dir / "train.csv"
-        val_path = self.data_dir / "val.csv"
-        test_path = self.data_dir / "test.csv"
+        train_path = self.data_dir / f"train{self.file_suffix}.csv"
+        val_path = self.data_dir / f"val{self.file_suffix}.csv"
+        test_path = self.data_dir / f"test{self.file_suffix}.csv"
 
         if not train_path.exists():
             raise FileNotFoundError(

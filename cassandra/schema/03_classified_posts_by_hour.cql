@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS classified_posts_by_hour (
 
     -- Author information (hashed for privacy)
     author_hash text,
+    permalink text,
 
     -- ML classification results
     stress_label boolean,   -- true = stress detected, false = no stress

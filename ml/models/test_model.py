@@ -9,7 +9,15 @@ from pathlib import Path
 import logging
 
 import torch
+import pandas as pd
+import numpy as np
 from transformers import DistilBertForSequenceClassification, DistilBertTokenizer
+from sklearn.metrics import (
+    accuracy_score,
+    precision_recall_fscore_support,
+    classification_report,
+    confusion_matrix
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -177,17 +185,169 @@ def batch_test(model_path: str):
     print("="*60 + "\n")
 
 
+def test_on_dataset(model_path: str, dataset_path: str, max_samples: int = None):
+    """
+    Test model on actual test dataset from CSV
+
+    Args:
+        model_path: Path to saved model
+        dataset_path: Path to test CSV file
+        max_samples: Maximum number of samples to test (None = all)
+    """
+    predictor = StressPredictor(model_path)
+
+    # Load test dataset
+    logger.info(f"Loading test dataset from {dataset_path}")
+    df = pd.read_csv(dataset_path)
+
+    if max_samples:
+        df = df.head(max_samples)
+
+    print("\n" + "="*80)
+    print("TESTING ON ACTUAL DATASET")
+    print("="*80)
+    print(f"Dataset: {dataset_path}")
+    print(f"Total samples: {len(df)}")
+    print("="*80 + "\n")
+
+    # Get texts and true labels
+    texts = df['text'].tolist()
+    true_labels = df['binary_label'].tolist()
+    label_names = df['label'].tolist()
+
+    # Predict on all samples
+    logger.info("Making predictions...")
+    predictions = []
+    confidences = []
+
+    for i, text in enumerate(texts):
+        if (i + 1) % 50 == 0:
+            logger.info(f"  Progress: {i + 1}/{len(texts)}")
+
+        pred_label, confidence = predictor.predict(text)
+        # Convert to binary (0 or 1)
+        pred_binary = 1 if pred_label == "STRESS" else 0
+        predictions.append(pred_binary)
+        confidences.append(confidence)
+
+    # Calculate metrics
+    accuracy = accuracy_score(true_labels, predictions)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        true_labels, predictions, average='binary'
+    )
+
+    # Per-class metrics
+    precision_per_class, recall_per_class, f1_per_class, _ = precision_recall_fscore_support(
+        true_labels, predictions, average=None, labels=[0, 1]
+    )
+
+    # Confusion matrix
+    cm = confusion_matrix(true_labels, predictions)
+
+    # Print results
+    print("\n" + "="*80)
+    print("OVERALL METRICS")
+    print("="*80)
+    print(f"Accuracy:  {accuracy:.4f} ({accuracy:.2%})")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall:    {recall:.4f}")
+    print(f"F1 Score:  {f1:.4f}")
+    print()
+
+    print("="*80)
+    print("PER-CLASS METRICS")
+    print("="*80)
+    print(f"NON_STRESS (Class 0):")
+    print(f"  Precision: {precision_per_class[0]:.4f}")
+    print(f"  Recall:    {recall_per_class[0]:.4f}")
+    print(f"  F1 Score:  {f1_per_class[0]:.4f}")
+    print()
+    print(f"STRESS (Class 1):")
+    print(f"  Precision: {precision_per_class[1]:.4f}")
+    print(f"  Recall:    {recall_per_class[1]:.4f}")
+    print(f"  F1 Score:  {f1_per_class[1]:.4f}")
+    print()
+
+    print("="*80)
+    print("CONFUSION MATRIX")
+    print("="*80)
+    print(f"                  Predicted")
+    print(f"              NON_STRESS  STRESS")
+    print(f"Actual NON    {cm[0][0]:10d}  {cm[0][1]:6d}")
+    print(f"       STRESS {cm[1][0]:10d}  {cm[1][1]:6d}")
+    print()
+
+    # Classification report
+    print("="*80)
+    print("DETAILED CLASSIFICATION REPORT")
+    print("="*80)
+    print(classification_report(
+        true_labels,
+        predictions,
+        target_names=['NON_STRESS', 'STRESS'],
+        digits=4
+    ))
+
+    # Show some examples of misclassifications
+    print("="*80)
+    print("SAMPLE MISCLASSIFICATIONS (First 10)")
+    print("="*80)
+
+    misclassified = []
+    for i, (true, pred) in enumerate(zip(true_labels, predictions)):
+        if true != pred:
+            misclassified.append({
+                'index': i,
+                'text': texts[i],
+                'true_label': label_names[i],
+                'pred_label': 'STRESS' if pred == 1 else 'NON_STRESS',
+                'confidence': confidences[i]
+            })
+
+    for i, item in enumerate(misclassified[:10], 1):
+        print(f"\n{i}. Text: {item['text'][:100]}...")
+        print(f"   True: {item['true_label']}, Predicted: {item['pred_label']} ({item['confidence']:.2%})")
+
+    print(f"\nTotal misclassified: {len(misclassified)}/{len(texts)}")
+    print("="*80 + "\n")
+
+    # Return metrics for programmatic use
+    return {
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1': f1,
+        'confusion_matrix': cm,
+        'per_class_metrics': {
+            'non_stress': {
+                'precision': precision_per_class[0],
+                'recall': recall_per_class[0],
+                'f1': f1_per_class[0]
+            },
+            'stress': {
+                'precision': precision_per_class[1],
+                'recall': recall_per_class[1],
+                'f1': f1_per_class[1]
+            }
+        }
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Test trained model")
-    parser.add_argument("--model-path", default="ml/models/reddit_stress_v1", help="Path to saved model")
+    parser.add_argument("--model-path", default="ml/models/reddit_stress_v4", help="Path to saved model")
     parser.add_argument("--interactive", action="store_true", help="Run in interactive mode")
     parser.add_argument("--batch", action="store_true", help="Run batch test on examples")
     parser.add_argument("--text", type=str, help="Single text to classify")
+    parser.add_argument("--dataset", type=str, help="Path to CSV dataset to test on")
+    parser.add_argument("--max-samples", type=int, help="Maximum number of samples to test from dataset")
 
     args = parser.parse_args()
 
     if args.interactive:
         interactive_mode(args.model_path)
+    elif args.dataset:
+        test_on_dataset(args.model_path, args.dataset, args.max_samples)
     elif args.batch:
         batch_test(args.model_path)
     elif args.text:

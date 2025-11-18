@@ -12,6 +12,7 @@ from pathlib import Path
 import logging
 
 import torch
+import torch.nn as nn
 import numpy as np
 import pandas as pd
 from transformers import (
@@ -27,9 +28,12 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix
 )
+from sklearn.utils.class_weight import compute_class_weight
 from torch.utils.data import Dataset
 
 from data_loader import StressDataset
+from augmentation import TextAugmenter, oversample_minority_class
+from focal_loss import WeightedFocalLoss
 
 # Setup logging
 logging.basicConfig(
@@ -37,6 +41,39 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+class WeightedTrainer(Trainer):
+    """Custom Trainer with class weights and optional focal loss for imbalanced data"""
+
+    def __init__(self, *args, class_weights=None, use_focal_loss=False, focal_gamma=2.0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.class_weights = class_weights
+        self.use_focal_loss = use_focal_loss
+        self.focal_gamma = focal_gamma
+
+    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+        labels = inputs.pop("labels")
+        outputs = model(**inputs)
+        logits = outputs.logits
+
+        # Choose loss function
+        if self.use_focal_loss:
+            # Use focal loss for hard examples
+            loss_fct = WeightedFocalLoss(
+                class_weights=self.class_weights.to(logits.device) if self.class_weights is not None else None,
+                gamma=self.focal_gamma
+            )
+        else:
+            # Use standard cross entropy with class weights
+            if self.class_weights is not None:
+                loss_fct = nn.CrossEntropyLoss(weight=self.class_weights.to(logits.device))
+            else:
+                loss_fct = nn.CrossEntropyLoss()
+
+        loss = loss_fct(logits, labels)
+
+        return (loss, outputs) if return_outputs else loss
 
 
 class RedditStressDataset(Dataset):
@@ -70,9 +107,12 @@ class RedditStressDataset(Dataset):
         }
 
 
+# Augmentation functions are now in augmentation.py
+
+
 def compute_metrics(pred):
     """
-    Compute evaluation metrics
+    Compute evaluation metrics (optimized for imbalanced classification)
 
     Args:
         pred: Predictions from the model
@@ -83,16 +123,28 @@ def compute_metrics(pred):
     labels = pred.label_ids
     preds = pred.predictions.argmax(-1)
 
+    # Binary metrics
     precision, recall, f1, _ = precision_recall_fscore_support(
         labels, preds, average='binary'
     )
     acc = accuracy_score(labels, preds)
 
+    # Per-class metrics for better understanding
+    precision_per_class, recall_per_class, f1_per_class, _ = precision_recall_fscore_support(
+        labels, preds, average=None, labels=[0, 1]
+    )
+
     return {
         'accuracy': acc,
         'precision': precision,
         'recall': recall,
-        'f1': f1
+        'f1': f1,
+        'precision_class_0': precision_per_class[0],
+        'recall_class_0': recall_per_class[0],
+        'f1_class_0': f1_per_class[0],
+        'precision_class_1': precision_per_class[1],
+        'recall_class_1': recall_per_class[1],
+        'f1_class_1': f1_per_class[1]
     }
 
 
@@ -105,10 +157,15 @@ def train_model(
     learning_rate: float = 2e-5,
     max_length: int = 512,
     save_name: str = "reddit_stress_v1",
-    use_gpu: bool = True
+    use_gpu: bool = True,
+    file_suffix: str = "",
+    balance_data: bool = True,
+    balance_ratio: float = 0.4,
+    use_focal_loss: bool = True,
+    focal_gamma: float = 2.0
 ):
     """
-    Train the stress detection model
+    Train the stress detection model with advanced techniques for imbalanced data
 
     Args:
         data_dir: Directory containing train/val/test splits
@@ -120,6 +177,11 @@ def train_model(
         max_length: Maximum sequence length
         save_name: Name for the saved model
         use_gpu: Whether to use GPU if available
+        file_suffix: Optional suffix for data files (e.g., "_v2" for train_v2.csv)
+        balance_data: Whether to balance dataset with augmentation
+        balance_ratio: Target ratio for minority class (0.4 = 40% minority, 60% majority)
+        use_focal_loss: Whether to use focal loss instead of standard CE loss
+        focal_gamma: Focusing parameter for focal loss (higher = more focus on hard examples)
     """
     logger.info("="*60)
     logger.info("REDDIT STRESS DETECTION - MODEL TRAINING")
@@ -132,13 +194,25 @@ def train_model(
     model_save_path = Path("ml/models") / save_name
     model_save_path.mkdir(parents=True, exist_ok=True)
 
-    # Check device
-    device = torch.device("cuda" if torch.cuda.is_available() and use_gpu else "cpu")
-    logger.info(f"Using device: {device}")
+    # Check device - support CUDA, MPS (Mac GPU), and CPU
+    if use_gpu:
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            logger.info(f"Using device: CUDA GPU")
+            logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+        elif torch.backends.mps.is_available():
+            device = torch.device("mps")
+            logger.info(f"Using device: MPS (Apple Silicon GPU)")
+        else:
+            device = torch.device("cpu")
+            logger.info(f"Using device: CPU (no GPU available)")
+    else:
+        device = torch.device("cpu")
+        logger.info(f"Using device: CPU (forced)")
 
     # Load dataset
     logger.info("\nLoading dataset...")
-    dataset = StressDataset(data_dir)
+    dataset = StressDataset(data_dir, file_suffix=file_suffix)
     dataset.load_splits()
     dataset.print_stats()
 
@@ -146,6 +220,31 @@ def train_model(
     train_texts, train_labels = dataset.get_texts_and_labels('train')
     val_texts, val_labels = dataset.get_texts_and_labels('val')
     test_texts, test_labels = dataset.get_texts_and_labels('test')
+
+    # Balance training data if requested
+    if balance_data:
+        logger.info("\n" + "="*60)
+        logger.info("BALANCING TRAINING DATA WITH ADVANCED AUGMENTATION")
+        logger.info("="*60)
+        augmenter = TextAugmenter(random_state=42)
+        train_texts, train_labels = oversample_minority_class(
+            train_texts, train_labels,
+            target_ratio=balance_ratio,
+            augmenter=augmenter
+        )
+        logger.info("="*60)
+
+    # Compute class weights for imbalanced dataset
+    logger.info("\nComputing class weights for imbalanced data...")
+    class_weights = compute_class_weight(
+        class_weight='balanced',
+        classes=np.unique(train_labels),
+        y=train_labels
+    )
+    class_weights = torch.tensor(class_weights, dtype=torch.float)
+    logger.info(f"Class weights: {class_weights.numpy()}")
+    logger.info(f"  Class 0 (non-stress): {class_weights[0]:.4f}")
+    logger.info(f"  Class 1 (stress): {class_weights[1]:.4f}")
 
     # Initialize tokenizer and model
     logger.info(f"\nLoading model: {model_name}")
@@ -164,6 +263,11 @@ def train_model(
     test_dataset = RedditStressDataset(test_texts, test_labels, tokenizer, max_length)
 
     # Training arguments
+    # Determine if we should use fp16 (only on CUDA, not MPS)
+    use_fp16 = torch.cuda.is_available() and use_gpu
+
+    # For newer transformers (5.0+), MPS is automatically used if available
+    # We just need to set no_cuda=True if we're not using CUDA
     training_args = TrainingArguments(
         output_dir=str(output_path),
         num_train_epochs=num_epochs,
@@ -180,17 +284,29 @@ def train_model(
         warmup_steps=100,
         save_total_limit=2,
         report_to="none",  # Changed from ["none"] for compatibility
-        seed=42
+        seed=42,
+        fp16=use_fp16  # Only use fp16 on CUDA, not MPS
+        # MPS is automatically detected and used in transformers 5.0+
+        # no_cuda is not needed as it's the default when CUDA is not available
     )
 
-    # Initialize trainer
-    trainer = Trainer(
+    # Initialize trainer with class weights and focal loss
+    logger.info("\nTrainer configuration:")
+    logger.info(f"  Loss function: {'Focal Loss' if use_focal_loss else 'Cross Entropy'}")
+    if use_focal_loss:
+        logger.info(f"  Focal gamma: {focal_gamma}")
+    logger.info(f"  Class weights: {class_weights.numpy()}")
+
+    trainer = WeightedTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         compute_metrics=compute_metrics,
-        callbacks=[EarlyStoppingCallback(early_stopping_patience=2)]
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+        class_weights=class_weights,
+        use_focal_loss=use_focal_loss,
+        focal_gamma=focal_gamma
     )
 
     # Train
@@ -317,13 +433,20 @@ def main():
     parser.add_argument("--data-dir", default="ml/dataset/splits", help="Dataset directory")
     parser.add_argument("--output-dir", default="ml/models/checkpoints", help="Checkpoint directory")
     parser.add_argument("--model-name", default="distilbert-base-uncased", help="Pretrained model")
-    parser.add_argument("--epochs", type=int, default=3, help="Number of epochs")
+    parser.add_argument("--epochs", type=int, default=5, help="Number of epochs (default: 5)")
     parser.add_argument("--batch-size", type=int, default=16, help="Batch size")
-    parser.add_argument("--learning-rate", type=float, default=2e-5, help="Learning rate")
+    parser.add_argument("--learning-rate", type=float, default=3e-5, help="Learning rate (default: 3e-5)")
     parser.add_argument("--max-length", type=int, default=512, help="Max sequence length")
     parser.add_argument("--save-name", default="reddit_stress_v1", help="Model save name")
     parser.add_argument("--cpu", action="store_true", help="Force CPU usage")
     parser.add_argument("--create-sample-data", action="store_true", help="Create sample dataset first")
+    parser.add_argument("--file-suffix", default="", help="Suffix for data files (e.g., '_v2')")
+    parser.add_argument("--balance-data", action="store_true", default=True, help="Balance dataset with augmentation")
+    parser.add_argument("--no-balance", dest="balance_data", action="store_false", help="Disable data balancing")
+    parser.add_argument("--balance-ratio", type=float, default=0.5, help="Target ratio for minority class (default: 0.5 = fully balanced)")
+    parser.add_argument("--focal-loss", action="store_true", default=True, help="Use focal loss for imbalanced data")
+    parser.add_argument("--no-focal", dest="focal_loss", action="store_false", help="Disable focal loss")
+    parser.add_argument("--focal-gamma", type=float, default=2.5, help="Focal loss gamma parameter (default: 2.5)")
 
     args = parser.parse_args()
 
@@ -343,7 +466,12 @@ def main():
         learning_rate=args.learning_rate,
         max_length=args.max_length,
         save_name=args.save_name,
-        use_gpu=not args.cpu
+        use_gpu=not args.cpu,
+        file_suffix=args.file_suffix,
+        balance_data=args.balance_data,
+        balance_ratio=args.balance_ratio,
+        use_focal_loss=args.focal_loss,
+        focal_gamma=args.focal_gamma
     )
 
 
