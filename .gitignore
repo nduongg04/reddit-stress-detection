@@ -57,12 +57,12 @@ logs/
 ehthumbs.db
 Thumbs.db
 
-# ML Models (large files)
+# ML Models (large files - now tracked with Git LFS)
 ml/models/*/checkpoint-*/
-ml/models/*/*.bin
-ml/models/*/*.safetensors
-ml/models/*/pytorch_model.bin
-ml/models/*/model.safetensors
+# Model files tracked by Git LFS in .gitattributes
+# ml/models/*/*.bin
+# ml/models/*/*.safetensors
+# ml/models/*/*.pt
 
 # Keep model metadata and config
 !ml/models/*/config.json

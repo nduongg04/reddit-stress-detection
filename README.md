@@ -19,6 +19,7 @@ Reddit → Kafka → Spark + Vietnamese PhoBERT → Cassandra → Grafana
 - Python 3.8+ with virtual environment
 - Reddit API credentials (free)
 - 8GB+ RAM
+- **Vietnamese PhoBERT model** (train it first: `./train_vietnamese_stress.sh`)
 
 ### Run Complete Pipeline
 
