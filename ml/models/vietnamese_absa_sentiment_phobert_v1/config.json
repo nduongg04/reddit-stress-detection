@@ -1,0 +1,16 @@
+{
+  "model_name": "vinai/phobert-base-v2",
+  "max_length": 256,
+  "batch_size": 32,
+  "learning_rate": 3e-05,
+  "weight_decay": 0.01,
+  "num_epochs": 15,
+  "num_aspects": 10,
+  "num_classes": 3,
+  "warmup_steps": 200,
+  "dropout": 0.5,
+  "use_class_weights": true,
+  "focal_loss_gamma": 2.0,
+  "output_dir": "ml/models/vietnamese_absa_sentiment_phobert_v1",
+  "data_file": "ml/dataset/labeled/vozforums_absa_sentiment.csv"
+}

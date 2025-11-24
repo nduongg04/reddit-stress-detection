@@ -1,162 +1,48 @@
 # Reddit Stress Detection System
 
-Real-time data pipeline for detecting stress-related content in Reddit posts using machine learning.
+Real-time ML pipeline detecting stress in Reddit posts using Vietnamese PhoBERT.
 
 ## Architecture
 
 ```
-Reddit (PRAW) → Kafka → Spark Streaming → Cassandra → Grafana
-                           ↓
-                    DistilBERT Model
+Reddit → Kafka → Spark + Vietnamese PhoBERT → Cassandra → Grafana
 ```
 
 ## Quick Start
 
+**New to this project?** → See [QUICKSTART.md](QUICKSTART.md) for detailed step-by-step guide.
+
+**Collecting Vietnamese data?** → See [VIETNAMESE_DATA_COLLECTION.md](VIETNAMESE_DATA_COLLECTION.md) for Vietnamese post collection.
+
 ### Prerequisites
 - Docker & Docker Compose
 - Python 3.8+ with virtual environment
+- Reddit API credentials (free)
 - 8GB+ RAM
 
-### Option 1: Automated (One Command - Recommended)
+### Run Complete Pipeline
 
-**Run entire pipeline with one script:**
 ```bash
+# One command to start everything!
 ./run.sh
 ```
 
-This will:
-- ✅ Activate virtual environment
-- ✅ Check v4 model exists
-- ✅ Start Docker services (Kafka, Cassandra, Grafana)
-- ✅ Initialize Cassandra schema
-- ✅ Create Kafka topics
-- ✅ Start Reddit Producer (background)
-- ✅ Start Spark ML Pipeline (background)
-- ✅ Monitor all components in real-time
-
-**What you'll see:**
-```
-✓ All Components Running!
-Running Components:
-  • Reddit Producer    (PID: 12345) → logs/producer.log
-  • Spark ML Pipeline  (PID: 12346) → logs/spark_ml.log
-  • Kafka              (Docker: reddit-kafka)
-  • Cassandra          (Docker: reddit-cassandra)
-
-Press Ctrl+C to stop all components
-```
-
-### Option 2: Manual (Step by Step)
-
-**Terminal 1: Infrastructure**
-```bash
-# Start Docker services
-docker-compose up -d
-
-# Wait 30 seconds, then initialize
-sleep 30
-docker exec -i reddit-cassandra cqlsh < cassandra/schema/01_keyspace.cql
-docker exec -i reddit-cassandra cqlsh < cassandra/schema/02_raw_posts_by_day.cql
-docker exec -i reddit-cassandra cqlsh < cassandra/schema/03_classified_posts_by_hour.cql
-docker exec -i reddit-cassandra cqlsh < cassandra/schema/04_agg_subreddit_hour.cql
-docker exec -i reddit-cassandra cqlsh < cassandra/schema/05_agg_global_hour.cql
-./scripts/init-kafka-topics.sh
-```
-
-**Terminal 2: Reddit Producer**
-```bash
-source .venv/bin/activate
-cd producers/reddit_producer
-python main.py
-```
-
-**Terminal 3: Spark Streaming + v4 Model**
-```bash
-source .venv/bin/activate
-python spark/kafka_to_cassandra_with_ml.py
-```
-
-**Test Integration**
-```bash
-./test_realtime_integration.sh
-```
-
-### Option 2: Basic Pipeline (No ML)
-
-```bash
-docker-compose up -d
-./scripts/init-kafka-topics.sh
-./scripts/init-cassandra-schema.sh
-
-docker exec -it reddit-spark-master spark-submit \
-  --master spark://spark-master:7077 \
-  --packages com.datastax.spark:spark-cassandra-connector_2.12:3.5.1,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1 \
-  /opt/spark-apps/kafka_to_cassandra.py
-```
+**Auto-configured features:**
+- ✅ Activates virtual environment
+- ✅ Validates Vietnamese PhoBERT model
+- ✅ Starts Docker services (Kafka, Cassandra, Spark, Grafana)
+- ✅ Initializes schemas and topics
+- ✅ Configures Kafka connection (localhost:29092 for local producer)
+- ✅ Starts Reddit Producer
+- ✅ Starts Spark ML Pipeline
+- ✅ Real-time monitoring
 
 ### Access Dashboards
+- **Streamlit ABSA Dashboard**: http://localhost:8501 (real-time Vietnamese mental health analytics)
 - **Grafana**: http://localhost:3000 (admin/admin)
-- **Spark UI**: http://localhost:8080
-- **Airflow**: http://localhost:8085
-
-## Project Structure
-
-```
-.
-├── cassandra/schema/            # Cassandra database schemas (5 tables)
-├── consumers/                   # Kafka consumers (DLQ monitoring)
-├── grafana/                     # Visualization dashboards
-├── ml/                          # Machine learning
-│   ├── dataset/                 # Training data (11,270 labeled posts)
-│   │   ├── labeled/             # Ollama-labeled dataset
-│   │   └── splits/              # Train/val/test splits
-│   └── models/                  # DistilBERT models (v1-v4)
-├── producers/reddit_producer/   # Reddit data crawler (PRAW)
-├── spark/                       # Spark streaming pipeline
-│   ├── kafka_to_cassandra.py        # Basic pipeline (no ML)
-│   ├── kafka_to_cassandra_with_ml.py # Real-time ML inference
-│   └── model_inference.py           # v4 model wrapper
-├── airflow/dags/                # Airflow orchestration
-├── scripts/                     # Setup scripts
-│   ├── init-kafka-topics.sh     # Kafka initialization
-│   ├── init-cassandra-schema.sh # Cassandra initialization
-│   └── airflow-init.sh          # Airflow initialization
-└── docker-compose.yml           # Infrastructure definition
-```
-
-## Components
-
-### Data Pipeline
-1. **Reddit Producer** (`producers/reddit_producer/`) - Crawls Reddit posts using PRAW
-2. **Kafka** - Message queue (topic: `reddit.posts.raw.v1`)
-3. **Spark Streaming** (`spark/kafka_to_cassandra.py`) - Processes and writes to Cassandra
-4. **Cassandra** - Time-series storage with 5 tables
-5. **Grafana** - Real-time dashboards
-
-### Machine Learning
-
-#### Models Available
-- **v1-v3**: Experimental versions
-- **v4** (Latest): Production-ready with best performance
-
-#### Training
-```bash
-# Activate environment
-source .venv/bin/activate
-
-# Train v4 model
-./train_reddit_stress_v4.sh
-
-# Test model
-./test_v4_model.sh
-```
-
-#### Model Details
-- **Architecture**: DistilBERT (distilbert-base-uncased)
-- **Task**: Binary classification (STRESS / NON_STRESS)
-- **Dataset**: 11,270 Reddit posts labeled by Ollama (llama3.1:8b)
-- **Performance**: ~80% accuracy, ~83% F1 score
-- **Real-Time Inference**: 30-60 seconds latency
+- **Kafka UI**: http://localhost:8080
+- **Spark UI**: http://localhost:8081
+- **Airflow**: http://localhost:8082 (airflow/airflow)
 
 ## Configuration
 
@@ -166,157 +52,201 @@ Create `producers/reddit_producer/.env`:
 REDDIT_CLIENT_ID=your_client_id
 REDDIT_CLIENT_SECRET=your_client_secret
 REDDIT_USER_AGENT=your_user_agent
-KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 ```
 
-### Rate Limiting
-Adjust `producers/reddit_producer/config/config.yaml`:
+### Performance Configuration
+Edit `producers/reddit_producer/config/config.yaml`:
 ```yaml
 reddit:
-  posts_per_minute: 10  # Max posts to fetch per minute (default: 10)
+  posts_per_minute: 100  # Maximized for Reddit's 100 QPM limit
+
+rate_limiting:
+  requests_per_minute: 100  # Reddit's max QPM (10-min avg)
+  burst_limit: 50  # Allow bursts up to 50 req/min
+  window_minutes: 10  # Reddit's averaging window
 ```
 
-**How it works:**
-- Fetches up to `posts_per_minute` new posts every minute
-- Automatically skips duplicate posts
-- Spreads requests evenly (e.g., 10 posts/min = 1 post every 6 seconds)
-- Prevents Reddit API rate limiting
+**Rate Limit Optimizations:**
+- **100 QPM sustained rate** (Reddit's max, averaged over 10 minutes)
+- **50 burst limit** for initial request bursts
+- **Adaptive throttling** based on Reddit API headers
+- **10-minute averaging window** matching Reddit's enforcement
+- Real-time monitoring of `X-Ratelimit-*` headers
 
-## Common Commands
+**Processing Optimizations:**
+- 8 parallel worker threads for concurrent processing
+- 500 posts/batch for Vietnamese collection (5x increase)
+- Parallel language detection using ThreadPoolExecutor
+- Minimal sleep delays (0.5s between searches)
+- Smart batch filtering before processing
+- Rate limiter handles all throttling automatically
 
-### View Real-Time Predictions
+## ML Model
+
+**Vietnamese PhoBERT Model:**
+- Multi-label classification (10 mental health characteristics)
+- Vietnamese-only stress detection
+- PhoBERT-base-v2 (135M parameters)
+- Trained on clean r/vozforums data
+- LDA-derived mental health topics
+
+**New Training Pipeline (r/vozforums):**
 ```bash
-# Check classified posts with ML predictions
-docker exec -it cassandra cqlsh -e "SELECT subreddit, title, stress_score, stress_label FROM reddit_rt.classified_posts_by_hour WHERE subreddit = 'anxiety' AND hour_partition = '2025-10-19-14' LIMIT 10;"
+# 1. Collect 1k stress posts from r/vozforums
+./collect_vozforums_stress.sh
 
-# View Kafka messages
-docker exec kafka kafka-console-consumer \
+# 2. Export collected posts
+python scripts/export_vietnamese_from_cassandra.py
+
+# 3. Extract 10 mental health topics with LDA
+python ml/lda/extract_topics.py
+
+# 4. Prepare balanced dataset (200 stress + 200 non-stress)
+python scripts/prepare_vozforums_dataset.py
+
+# 5. Train multi-label PhoBERT model
+# (Training script supports multi-label via topic JSON)
+```
+
+**Old Binary Classification:**
+```bash
+# Binary STRESS/NON_STRESS (kept for reference)
+./train_vietnamese_stress.sh
+./test_vietnamese_model.sh
+```
+
+## Monitoring & Verification
+
+### Check Pipeline Health
+
+```bash
+# 1. Producer is crawling posts
+tail -f logs/reddit_producer.log | grep "Published"
+
+# 2. Kafka has messages
+docker exec reddit-kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 \
   --topic reddit.posts.raw.v1 \
-  --from-beginning \
   --max-messages 5
+
+# 3. Spark is processing
+docker logs -f reddit-spark-master | grep "Batch"
+
+# 4. Data in Cassandra
+docker exec -it reddit-cassandra cqlsh
 ```
 
-### Logs & Monitoring
+### View Data in Cassandra
 
-**When using run.sh:**
-```bash
-# View live producer logs
-tail -f logs/producer.log
+```sql
+-- Inside cqlsh
+USE reddit_rt;
 
-# View live Spark ML logs
-tail -f logs/spark_ml.log
+-- View recent classified posts
+SELECT subreddit, title, stress_score, stress_label, created_utc
+FROM classified_posts_by_hour
+LIMIT 10;
 
-# View both simultaneously
-tail -f logs/producer.log logs/spark_ml.log
+-- Count total posts
+SELECT COUNT(*) FROM classified_posts_by_hour;
+
+-- View stress posts only
+SELECT * FROM classified_posts_by_hour
+WHERE subreddit = 'anxiety'
+  AND hour_partition = '2024-11-20-15'
+  AND stress_label = true
+LIMIT 20;
+
+-- Check aggregated metrics
+SELECT * FROM agg_subreddit_hour LIMIT 10;
+SELECT * FROM agg_global_hour LIMIT 10;
 ```
 
-**When using Docker:**
-```bash
-# View producer logs
-docker logs -f reddit-producer
+### Real-Time Monitoring
 
-# View Spark logs
-docker logs -f reddit-spark-master
+```bash
+# Watch post count grow
+watch 'docker exec reddit-cassandra cqlsh -e \
+  "SELECT COUNT(*) FROM reddit_rt.classified_posts_by_hour;"'
+
+# Monitor producer rate
+tail -f logs/reddit_producer.log | grep "Rate:"
+
+# Track Spark processing
+docker logs -f reddit-spark-master 2>&1 | grep "classified"
 ```
 
-**Check Data:**
+## Performance Metrics
+
+**Expected Throughput:**
+- **100 requests/minute** sustained (Reddit API max)
+- **500 posts per search batch** (5x original)
+- **~5,000 posts in 8-12 minutes** (Vietnamese collection)
+- **~8x faster processing** with parallel workers
+
+**Rate Limit Monitoring:**
 ```bash
-# Check raw data count
-docker exec -it reddit-cassandra cqlsh -e "SELECT COUNT(*) FROM reddit_rt.raw_posts_by_day;"
+# Watch producer logs for rate limit stats
+tail -f logs/reddit_producer.log | grep "Rate:"
 
-# Check classified posts with ML predictions
-docker exec -it reddit-cassandra cqlsh -e "SELECT * FROM reddit_rt.classified_posts_by_hour LIMIT 10;"
-```
-
-### Service Management
-```bash
-# Restart services
-docker-compose restart
-
-# Stop all
-docker-compose down
+# Example output:
+# Rate: 98.5/100 QPM (98.5% utilized)
+# Reddit API: 750 used, 250 remaining, resets in 480s
 ```
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| **Model not found** | Run `./train_reddit_stress_v4.sh` |
+| **Producer DNS lookup failed** | Run `./run.sh` (auto-fixes Kafka config) |
+| **Model not found** | Run `./train_vietnamese_stress.sh` |
 | **Kafka not connecting** | `docker-compose restart kafka` |
-| **No data in Grafana** | Check if producer & Spark are running |
 | **Out of memory** | Increase Docker memory to 4GB+ |
-| **Python dependencies** | `pip install transformers torch pyspark` |
+| **Rate limit errors** | Producer auto-throttles; wait for reset window |
+| **Ollama not found** | Install: `brew install ollama` (Mac) or see https://ollama.com |
 
-### Kafka Issues
+### Kafka Connection Issue
+
+If producer shows `DNS lookup failed for kafka:9092`:
+
 ```bash
-docker exec kafka kafka-topics --list --bootstrap-server localhost:9092
-./scripts/init-kafka-topics.sh
+# Auto-fix (recommended)
+./run.sh
+
+# Manual fix
+# Edit producers/reddit_producer/config/config.yaml
+# Change: - kafka:9092
+# To:     - localhost:29092
 ```
 
-### Cassandra Issues
-```bash
-docker exec -it cassandra nodetool status
-docker exec -it cassandra cqlsh -e "DESCRIBE KEYSPACE reddit_rt;"
-```
-
-### ML Pipeline Issues
-```bash
-# Test model inference
-python spark/model_inference.py
-
-# Run integration test
-./test_realtime_integration.sh
-```
+**Why:** Producer runs locally (needs `localhost:29092`), Spark runs in Docker (uses `kafka:9092`).
 
 ## Tech Stack
 
 - **Streaming**: Apache Kafka, Apache Spark
 - **Storage**: Apache Cassandra
-- **ML**: DistilBERT, Hugging Face Transformers, Ollama
+- **ML**: PhoBERT-base-v2 (Hugging Face Transformers)
 - **Orchestration**: Apache Airflow
 - **Visualization**: Grafana
 - **Language**: Python 3.8+
-
-## What You'll See
-
-### Spark Terminal (Real-Time ML)
-```
-[Batch 0] Processing 5 records...
-[Batch 0] Stress detected: 3/5 (60.0%)
-[Batch 0] ✓ Written to raw_posts_by_day
-[Batch 0] ✓ Written to classified_posts_by_hour
-[Batch 0] ✓ Batch processing complete
-```
-
-### Grafana Dashboard
-- Real-time stress detection rate gauge
-- Posts processed counter
-- High-stress posts table with scores
-- Trend graphs showing stress over time
-- Per-subreddit breakdown
+- **Labeling**: Ollama (llama3.1:8b)
 
 ## Key Files
 
-| Component | File | Description |
-|-----------|------|-------------|
-| **Run Pipeline** | `run.sh` | Start entire pipeline (one command) |
-| **ML Inference** | `spark/model_inference.py` | v4 model wrapper |
-| **ML Pipeline** | `spark/kafka_to_cassandra_with_ml.py` | Real-time ML streaming |
-| **Basic Pipeline** | `spark/kafka_to_cassandra.py` | Basic streaming (no ML) |
-| **v4 Model** | `ml/models/reddit_stress_v4/` | Trained model files |
-| **Schema** | `cassandra/schema/*.cql` | Database schemas |
-| **Integration Test** | `test_realtime_integration.sh` | Test all components |
-| **Train v4** | `train_reddit_stress_v4.sh` | Train model script |
-| **Test v4** | `test_v4_model.sh` | Test model accuracy |
-| **Config** | `producers/reddit_producer/config/config.yaml` | Rate limiting & settings |
-
-## Version
-
-**Project Version**: 1.0.0
-**Model Version**: v4 (DistilBERT)
-**Last Updated**: October 2025
+| File | Description |
+|------|-------------|
+| `run.sh` | Start entire pipeline |
+| `train_vietnamese_stress.sh` | Train Vietnamese PhoBERT model |
+| `test_vietnamese_model.sh` | Test model accuracy |
+| `spark/kafka_to_cassandra_with_ml.py` | Real-time ML pipeline |
+| `spark/model_inference.py` | Vietnamese model wrapper |
+| `ml/models/vietnamese_augmentation.py` | Vietnamese text augmentation |
+| `scripts/export_vietnamese_from_cassandra.py` | Export Vietnamese posts |
+| `ml/dataset/label_vietnamese_with_ollama.py` | Automated labeling |
+| `producers/reddit_producer/config/config.yaml` | Rate limiting & settings |
 
 ---
 
-SE363 - Software Engineering Project
+**Project Version**: 2.0.0
+**Model Version**: Vietnamese PhoBERT v1
+**SE363** - Software Engineering Project

@@ -1,12 +1,9 @@
 reddit:
-  # Collection modes:
-  # - "vietnamese": General Vietnamese keyword collection (stress + non-stress)
-  # - "vozforums_stress": r/vozforums stress posts only (for clean training data)
-  # - "subreddit": Traditional subreddit streaming
-  collection_mode: "vozforums_stress"
+  # Collection mode: "vietnamese" for keyword-based collection
+  collection_mode: "vietnamese"
 
-  # Target posts (mode-specific)
-  target_posts: 1000  # Continuous collection for testing streaming
+  # Vietnamese keyword collection settings
+  target_posts: 5000  # Total posts (2,500 stress + 2,500 non-stress)
 
   # Not used in Vietnamese mode but required
   subreddits:
@@ -14,11 +11,11 @@ reddit:
   stream_types:
     - submissions
   skip_existing: true
-  posts_per_minute: 10  # Demo: 10 posts/minute
+  posts_per_minute: 100
 
 kafka:
   bootstrap_servers:
-    - kafka:9092  # Producer runs in Docker
+    - localhost:29092  # Producer runs locally
   topic: reddit.posts.raw.v1
   dlq_topic: reddit.posts.dlq.v1
 

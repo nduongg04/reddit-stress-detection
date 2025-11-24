@@ -39,7 +39,8 @@ schema = StructType([
     StructField("permalink", StringType(), True),
     StructField("type", StringType(), True),
     StructField("source", StringType(), True),
-    StructField("ingestion_timestamp", StringType(), True)
+    StructField("ingestion_timestamp", StringType(), True),
+    StructField("search_category", StringType(), True)  # Added for Vietnamese collection
 ])
 
 # Read from Kafka
@@ -82,7 +83,8 @@ transformed_df = parsed_df \
         col("permalink"),
         col("source"),
         col("subreddit"),
-        col("title")
+        col("title"),
+        col("search_category")  # Added for Vietnamese collection
     )
 
 print("✓ Data transformation configured")

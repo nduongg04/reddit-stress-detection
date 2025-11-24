@@ -1,0 +1,279 @@
+{
+  "description": "10 ABSA Mental Health Aspects from LDA Topic Modeling",
+  "source": "1095 r/vozforums stress posts",
+  "method": "LDA + Manual Interpretation",
+  "usage": "Multi-label ABSA classification with PhoBERT",
+  "num_aspects": 10,
+  "aspects": [
+    {
+      "id": 0,
+      "aspect_name": "công_việc",
+      "vietnamese": "công_việc_hoạt_động",
+      "description": "Work, effort, activity, capability (công, lực, động, năng lực)",
+      "lda_keywords": [
+        "công",
+        "lực",
+        "động",
+        "hoặc",
+        "nhân",
+        "hiện",
+        "hội",
+        "theo",
+        "cách",
+        "năng"
+      ],
+      "interpretation_keywords": [
+        "công",
+        "lực",
+        "động",
+        "năng",
+        "hoạt động"
+      ],
+      "mental_health_relevance": "Work-related stress, effort, burnout",
+      "lda_topic_label": "công_lực_động"
+    },
+    {
+      "id": 1,
+      "aspect_name": "giấc_ngủ_thuốc",
+      "vietnamese": "giấc_ngủ_thuốc",
+      "description": "Sleep problems, medication, daily routine (ngủ, thuốc, ngày)",
+      "lda_keywords": [
+        "ngày",
+        "sau",
+        "ổng",
+        "ngủ",
+        "thuốc",
+        "nhà",
+        "đầu",
+        "thường",
+        "vẫn",
+        "khá"
+      ],
+      "interpretation_keywords": [
+        "ngủ",
+        "thuốc",
+        "ngày",
+        "đầu",
+        "thường"
+      ],
+      "mental_health_relevance": "Insomnia, medication dependence, daily functioning",
+      "lda_topic_label": "ngày_sau_ổng"
+    },
+    {
+      "id": 2,
+      "aspect_name": "giao_tiếp",
+      "vietnamese": "giao_tiếp_cá_nhân",
+      "description": "Personal communication, interactions (tui, anh, ông, con)",
+      "lda_keywords": [
+        "tui",
+        "anh",
+        "ông",
+        "con",
+        "nhà",
+        "hắn",
+        "ngày",
+        "đầu",
+        "cái",
+        "mấy"
+      ],
+      "interpretation_keywords": [
+        "tui",
+        "anh",
+        "ông",
+        "con",
+        "nhà"
+      ],
+      "mental_health_relevance": "Social interactions, communication patterns",
+      "lda_topic_label": "tui_anh_ông"
+    },
+    {
+      "id": 3,
+      "aspect_name": "thiếu_năng_lượng",
+      "vietnamese": "thiếu_năng_lượng",
+      "description": "Lack of energy, deficiency (thiếu năng lượng)",
+      "lda_keywords": [
+        "việt",
+        "nam",
+        "thiếu",
+        "ông",
+        "năng",
+        "lượng",
+        "thành",
+        "chất",
+        "công",
+        "thần"
+      ],
+      "interpretation_keywords": [
+        "thiếu",
+        "năng",
+        "lượng",
+        "việt",
+        "nam"
+      ],
+      "mental_health_relevance": "Low energy, fatigue, depletion",
+      "lda_topic_label": "việt_nam_thiếu"
+    },
+    {
+      "id": 4,
+      "aspect_name": "căng_thẳng_tài_chính",
+      "vietnamese": "căng_thẳng_tài_chính_công_việc",
+      "description": "Financial concerns, work, salary (tiền, công, lương)",
+      "lda_keywords": [
+        "công",
+        "tiền",
+        "anh",
+        "tháng",
+        "nhà",
+        "sau",
+        "định",
+        "tại",
+        "lương",
+        "hiện"
+      ],
+      "interpretation_keywords": [
+        "tiền",
+        "công",
+        "lương",
+        "tháng",
+        "định"
+      ],
+      "mental_health_relevance": "Financial stress, job security, income worries",
+      "lda_topic_label": "công_tiền_anh"
+    },
+    {
+      "id": 5,
+      "aspect_name": "tình_yêu",
+      "vietnamese": "tình_yêu_quan_hệ",
+      "description": "Love, relationships, emotional connections (yêu, tình, chuyện)",
+      "lda_keywords": [
+        "anh",
+        "yêu",
+        "chuyện",
+        "tình",
+        "nhau",
+        "sau",
+        "tin",
+        "nhắn",
+        "hỏi",
+        "vẫn"
+      ],
+      "interpretation_keywords": [
+        "yêu",
+        "tình",
+        "chuyện",
+        "nhau",
+        "tin"
+      ],
+      "mental_health_relevance": "Romantic problems, heartbreak, relationship conflicts",
+      "lda_topic_label": "anh_yêu_chuyện"
+    },
+    {
+      "id": 6,
+      "aspect_name": "tự_suy_ngẫm",
+      "vietnamese": "tự_suy_ngẫm",
+      "description": "Self-awareness, thinking, introspection (bản thân, nghĩ, tâm)",
+      "lda_keywords": [
+        "thân",
+        "bản",
+        "nghĩ",
+        "giờ",
+        "vẫn",
+        "đầu",
+        "thời",
+        "qua",
+        "tâm",
+        "quá"
+      ],
+      "interpretation_keywords": [
+        "bản",
+        "thân",
+        "nghĩ",
+        "tâm",
+        "giờ"
+      ],
+      "mental_health_relevance": "Self-doubt, overthinking, self-awareness",
+      "lda_topic_label": "thân_bản_nghĩ"
+    },
+    {
+      "id": 7,
+      "aspect_name": "trầm_cảm",
+      "vietnamese": "bệnh_trầm_cảm",
+      "description": "Mental illness, depression, medical treatment (bệnh, trầm cảm, khám)",
+      "lda_keywords": [
+        "bệnh",
+        "con",
+        "cái",
+        "trầm",
+        "bác",
+        "nhà",
+        "tâm",
+        "nghĩ",
+        "khám",
+        "lần"
+      ],
+      "interpretation_keywords": [
+        "bệnh",
+        "trầm",
+        "cảm",
+        "khám",
+        "bác"
+      ],
+      "mental_health_relevance": "Depression diagnosis, medical help-seeking",
+      "lda_topic_label": "bệnh_con_cái"
+    },
+    {
+      "id": 8,
+      "aspect_name": "gia_đình",
+      "vietnamese": "gia_đình_cuộc_sống",
+      "description": "Family, home life, children (nhà, con, sống, gia đình)",
+      "lda_keywords": [
+        "nhà",
+        "con",
+        "sống",
+        "chuyện",
+        "tiền",
+        "ngày",
+        "gia",
+        "đình",
+        "lần",
+        "cái"
+      ],
+      "interpretation_keywords": [
+        "nhà",
+        "con",
+        "sống",
+        "gia",
+        "đình"
+      ],
+      "mental_health_relevance": "Family stress, parenting, household issues",
+      "lda_topic_label": "nhà_con_sống"
+    },
+    {
+      "id": 9,
+      "aspect_name": "tìm_kiếm_giúp_đỡ",
+      "vietnamese": "tâm_trạng_tìm_kiếm",
+      "description": "Mental state, seeking help/solutions (tâm, tìm, hiện)",
+      "lda_keywords": [
+        "tâm",
+        "ảnh",
+        "tìm",
+        "hiện",
+        "ngày",
+        "vẫn",
+        "mới",
+        "đây",
+        "đầu",
+        "điều"
+      ],
+      "interpretation_keywords": [
+        "tâm",
+        "tìm",
+        "hiện",
+        "trạng",
+        "điều"
+      ],
+      "mental_health_relevance": "Mental health state, help-seeking behavior",
+      "lda_topic_label": "tâm_ảnh_tìm"
+    }
+  ]
+}
