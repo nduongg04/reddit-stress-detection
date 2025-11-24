@@ -111,7 +111,7 @@ services:
       timeout: 10s
       retries: 5
 
-  # Spark Master
+  # Spark Master (with automatic streaming job submission)
   spark-master:
     build:
       context: .
@@ -120,16 +120,17 @@ services:
     hostname: spark-master
     container_name: reddit-spark-master
     ports:
-      - "8081:8080"
-      - "7077:7077"
-      - "4040:4040"
+      - "8081:8080"  # Spark Master UI
+      - "7077:7077"  # Spark Master port
+      - "4040:4040"  # Spark Application UI
     environment:
       - SPARK_MODE=master
       - SPARK_NO_DAEMONIZE=true
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
-    volumes:
-      - ./spark/apps:/opt/spark-apps
-      - ./spark/data:/opt/spark-data
+    depends_on:
+      kafka:
+        condition: service_healthy
+      cassandra:
+        condition: service_healthy
     networks:
       - reddit-network
     healthcheck:
@@ -149,15 +150,31 @@ services:
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_MEMORY=3G
       - SPARK_WORKER_CORES=2
       - SPARK_NO_DAEMONIZE=true
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
-    volumes:
-      - ./spark/apps:/opt/spark-apps
-      - ./spark/data:/opt/spark-data
     networks:
       - reddit-network
+
+  # Reddit Producer
+  reddit-producer:
+    build:
+      context: ./producers/reddit_producer
+      dockerfile: Dockerfile
+    container_name: reddit-producer
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      REDDIT_CLIENT_ID: ${REDDIT_CLIENT_ID}
+      REDDIT_CLIENT_SECRET: ${REDDIT_CLIENT_SECRET}
+      REDDIT_USER_AGENT: ${REDDIT_USER_AGENT}
+    volumes:
+      - ./producers/reddit_producer/config:/app/config
+      - ./logs:/app/logs
+    networks:
+      - reddit-network
+    restart: unless-stopped
 
   # Grafana for visualization
   grafana:
@@ -258,31 +275,28 @@ services:
     networks:
       - reddit-network
 
-  # Reddit Producer (PRAW) - Real-time data ingestion
-  reddit-producer:
-    build: ./producers/reddit_producer
-    hostname: reddit-producer
-    container_name: reddit-producer
+  # Streamlit Dashboard
+  streamlit:
+    build:
+      context: ./streamlit_app
+      dockerfile: Dockerfile
+    hostname: streamlit
+    container_name: reddit-streamlit
     depends_on:
-      kafka:
+      cassandra:
         condition: service_healthy
     ports:
-      - "8090:8080"  # Health/metrics endpoint (changed port to avoid conflict with kafka-ui)
-    env_file:
-      - ./producers/reddit_producer/.env
-    environment:
-      - PYTHONUNBUFFERED=1
+      - "8501:8501"
     volumes:
-      - ./producers/reddit_producer/logs:/app/logs
+      - ./ml/lda/absa_mental_health_aspects.json:/opt/ml/lda/absa_mental_health_aspects.json:ro
     networks:
       - reddit-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health', timeout=5)"]
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
 
 volumes:
   zookeeper-data:

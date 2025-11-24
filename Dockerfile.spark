@@ -5,7 +5,7 @@ USER root
 
 # Install pip and upgrade it, then install ML dependencies
 # Note: Using --no-deps and manual dependency installation to avoid hf-xet ARM64 issues
-RUN apt-get update && apt-get install -y python3-pip && \
+RUN apt-get update && apt-get install -y python3-pip curl && \
     pip3 install --upgrade pip && \
     pip3 install --no-cache-dir \
     numpy \
@@ -28,17 +28,28 @@ RUN apt-get update && apt-get install -y python3-pip && \
     transformers==4.35.0 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Create directories for ML models and apps
-RUN mkdir -p /opt/ml/models /opt/spark-apps
+# Create directories for ML models, apps, and LDA data
+RUN mkdir -p /opt/ml/models /opt/ml/lda /opt/spark-apps
 
 # Pre-download Spark packages to avoid runtime download issues
 RUN /opt/spark/bin/spark-submit --packages com.datastax.spark:spark-cassandra-connector_2.12:3.5.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 --help || true
 
-# Copy ML model (v4) into the image
-COPY ml/models/reddit_stress_v4 /opt/ml/models/reddit_stress_v4
+# Copy Vietnamese ABSA Sentiment PhoBERT model (trained model)
+COPY ml/models/vietnamese_absa_sentiment_phobert_v1 /opt/ml/models/vietnamese_absa_sentiment_phobert_v1
+
+# Copy ABSA aspects definition
+COPY ml/lda/absa_mental_health_aspects.json /opt/ml/lda/absa_mental_health_aspects.json
 
 # Copy Spark streaming applications
-COPY spark/kafka_to_cassandra_with_ml_docker.py /opt/spark-apps/kafka_to_cassandra_with_ml.py
-COPY spark/model_inference.py /opt/spark-apps/model_inference.py
+COPY spark/kafka_to_cassandra.py /opt/spark-apps/kafka_to_cassandra.py
+COPY spark/kafka_to_cassandra_with_absa.py /opt/spark-apps/kafka_to_cassandra_with_absa.py
+COPY spark/model_inference_absa.py /opt/spark-apps/model_inference_absa.py
+
+# Copy entrypoint script
+COPY spark/entrypoint.sh /opt/spark-apps/entrypoint.sh
+RUN chmod +x /opt/spark-apps/entrypoint.sh
 
 WORKDIR /opt/spark-apps
+
+# Set entrypoint
+ENTRYPOINT ["/opt/spark-apps/entrypoint.sh"]

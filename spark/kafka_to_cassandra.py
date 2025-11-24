@@ -39,7 +39,8 @@ schema = StructType([
     StructField("permalink", StringType(), True),
     StructField("type", StringType(), True),
     StructField("source", StringType(), True),
-    StructField("ingestion_timestamp", StringType(), True)
+    StructField("ingestion_timestamp", StringType(), True),
+    StructField("search_category", StringType(), True)  # Added for Vietnamese collection
 ])
 
 # Read from Kafka
@@ -82,7 +83,8 @@ transformed_df = parsed_df \
         col("permalink"),
         col("source"),
         col("subreddit"),
-        col("title")
+        col("title"),
+        col("search_category")  # Added for Vietnamese collection
     )
 
 print("✓ Data transformation configured")
@@ -101,7 +103,11 @@ def write_to_cassandra(batch_df, batch_id):
         batch_df.write \
             .format("org.apache.spark.sql.cassandra") \
             .mode("append") \
-            .options(table="raw_posts_by_day", keyspace="reddit_rt") \
+            .options(
+                table="raw_posts_by_day",
+                keyspace="reddit_rt",
+                **{"spark.cassandra.connection.host": "cassandra", "spark.cassandra.connection.port": "9042"}
+            ) \
             .save()
 
         print(f"[Batch {batch_id}] ✓ Written to Cassandra")

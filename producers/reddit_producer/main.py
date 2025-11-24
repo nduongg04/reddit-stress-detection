@@ -117,29 +117,58 @@ def main():
         # Initialize Reddit stream
         logger.info("Initializing Reddit stream...")
         reddit_stream = RedditStream(config.to_dict(), kafka_producer)
+        reddit_stream.shutdown_event = shutdown_event
+
+        # Check collection mode
+        collection_mode = config['reddit'].get('collection_mode', 'subreddit')
+        logger.info(f"Collection mode: {collection_mode}")
 
         # Start stream threads
         threads = []
 
-        if args.stream_type in ['both', 'submissions']:
-            logger.info("Starting submission stream thread...")
-            submission_thread = Thread(
-                target=reddit_stream.stream_submissions,
-                name='SubmissionStream',
+        if collection_mode == 'vietnamese':
+            # Vietnamese keyword-based collection
+            logger.info("Starting Vietnamese keyword collection thread...")
+            vietnamese_thread = Thread(
+                target=reddit_stream.stream_vietnamese_keywords,
+                name='VietnameseKeywordStream',
                 daemon=True
             )
-            submission_thread.start()
-            threads.append(submission_thread)
+            vietnamese_thread.start()
+            threads.append(vietnamese_thread)
 
-        if args.stream_type in ['both', 'comments']:
-            logger.info("Starting comment stream thread...")
-            comment_thread = Thread(
-                target=reddit_stream.stream_comments,
-                name='CommentStream',
+        elif collection_mode == 'vozforums_stress':
+            # r/vozforums stress collection only
+            logger.info("Starting r/vozforums stress collection thread...")
+            vozforums_thread = Thread(
+                target=reddit_stream.stream_vozforums_stress,
+                name='VozforumsStressStream',
                 daemon=True
             )
-            comment_thread.start()
-            threads.append(comment_thread)
+            vozforums_thread.start()
+            threads.append(vozforums_thread)
+
+        else:
+            # Standard subreddit-based collection
+            if args.stream_type in ['both', 'submissions']:
+                logger.info("Starting submission stream thread...")
+                submission_thread = Thread(
+                    target=reddit_stream.stream_submissions,
+                    name='SubmissionStream',
+                    daemon=True
+                )
+                submission_thread.start()
+                threads.append(submission_thread)
+
+            if args.stream_type in ['both', 'comments']:
+                logger.info("Starting comment stream thread...")
+                comment_thread = Thread(
+                    target=reddit_stream.stream_comments,
+                    name='CommentStream',
+                    daemon=True
+                )
+                comment_thread.start()
+                threads.append(comment_thread)
 
         logger.info("=" * 80)
         logger.info("Reddit Producer Running")

@@ -2,8 +2,8 @@
 """
 Model Inference Module for Real-Time Stress Detection
 
-Loads the v4 DistilBERT model and provides batch inference capabilities
-for Spark Streaming pipeline.
+Loads stress detection model (DistilBERT v4 or PhoBERT Vietnamese)
+and provides batch inference capabilities for Spark Streaming pipeline.
 """
 import os
 import torch
@@ -17,27 +17,74 @@ logger = logging.getLogger(__name__)
 
 class StressDetectionModel:
     """
-    Wrapper for the v4 stress detection model.
+    Wrapper for stress detection model (DistilBERT v4 or PhoBERT Vietnamese).
     Optimized for batch inference in Spark.
     """
 
-    def __init__(self, model_path: str = "/opt/ml/models/reddit_stress_v4"):
+    def __init__(self, model_path: str = "/opt/ml/models/vietnamese_stress_phobert"):
         """
         Initialize the model and tokenizer.
 
         Args:
             model_path: Path to the trained model directory
+                       Default: Vietnamese PhoBERT model
+                       Alternative: /opt/ml/models/reddit_stress_v4 (English)
         """
         self.model_path = model_path
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Detect device: CUDA → MPS → CPU
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            self.device = torch.device("mps")
+        else:
+            self.device = torch.device("cpu")
+
         self.model = None
         self.tokenizer = None
-        self.model_version = "v4"
+
+        # Detect model version from path
+        if "vietnamese" in model_path.lower() or "phobert" in model_path.lower():
+            self.model_version = "vietnamese_phobert_v1"
+            self.max_length = 256  # Vietnamese posts are shorter
+        else:
+            self.model_version = "v4"  # English DistilBERT
+            self.max_length = 512
 
         logger.info(f"Initializing model from: {model_path}")
+        logger.info(f"Model version: {self.model_version}")
         logger.info(f"Using device: {self.device}")
+        logger.info(f"Max sequence length: {self.max_length}")
 
         self._load_model()
+
+    def _preprocess_text(self, text: str) -> str:
+        """
+        Preprocess text for inference.
+
+        Args:
+            text: Raw input text
+
+        Returns:
+            Preprocessed text
+        """
+        if not text or not isinstance(text, str):
+            return ""
+
+        # Basic preprocessing
+        text = text.strip()
+
+        # Vietnamese-specific preprocessing
+        if "vietnamese" in self.model_version.lower():
+            import unicodedata
+            # Normalize Unicode (NFC normalization for Vietnamese diacritics)
+            text = unicodedata.normalize('NFC', text)
+
+            # Remove excessive whitespace
+            import re
+            text = re.sub(r'\s+', ' ', text)
+
+        return text
 
     def _load_model(self):
         """Load the model and tokenizer from disk."""
@@ -110,12 +157,15 @@ class StressDetectionModel:
         Returns:
             List of prediction dictionaries
         """
+        # Preprocess texts (Vietnamese-specific if needed)
+        processed_texts = [self._preprocess_text(text) for text in texts]
+
         # Tokenize
         inputs = self.tokenizer(
-            texts,
+            processed_texts,
             padding=True,
             truncation=True,
-            max_length=512,
+            max_length=self.max_length,
             return_tensors="pt"
         )
 
@@ -160,13 +210,15 @@ class StressDetectionModel:
 _model_instance = None
 
 
-def get_model_instance(model_path: str = "/opt/ml/models/reddit_stress_v4") -> StressDetectionModel:
+def get_model_instance(model_path: str = "/opt/ml/models/vietnamese_stress_phobert") -> StressDetectionModel:
     """
     Get or create the singleton model instance.
     This ensures the model is loaded only once per Spark executor.
 
     Args:
         model_path: Path to the model directory
+                   Default: Vietnamese PhoBERT model
+                   Alternative: /opt/ml/models/reddit_stress_v4 (English)
 
     Returns:
         StressDetectionModel instance
@@ -195,19 +247,44 @@ def predict_stress_udf(texts: List[str]) -> List[Dict[str, Any]]:
 
 if __name__ == "__main__":
     # Test the model
+    import sys
+
+    # Allow specifying model path as argument
+    model_path = sys.argv[1] if len(sys.argv) > 1 else None
+
     print("Testing stress detection model...")
+    if model_path:
+        print(f"Using model: {model_path}")
+        model = StressDetectionModel(model_path)
+    else:
+        print("Using default Vietnamese model")
+        model = StressDetectionModel()
 
-    model = StressDetectionModel()
+    # Test texts (Vietnamese)
+    test_texts_vi = [
+        "Tôi đang rất căng thẳng và lo âu về công việc",
+        "Hôm nay tôi rất vui vẻ và hạnh phúc",
+        "Cảm thấy mệt mỏi và kiệt sức sau một tuần dài",
+        "Cuối tuần đi du lịch thật tuyệt vời"
+    ]
 
-    test_texts = [
+    # Test texts (English - for v4 model)
+    test_texts_en = [
         "I'm feeling so overwhelmed with work and life right now",
         "Just had a great day at the park with friends",
         "Can't sleep, anxiety is killing me",
         "Looking forward to the weekend!"
     ]
 
-    print("\nTest predictions:")
-    print("-" * 60)
+    # Use appropriate test set based on model
+    if "vietnamese" in model.model_version.lower():
+        test_texts = test_texts_vi
+        print("\nTesting with Vietnamese texts:")
+    else:
+        test_texts = test_texts_en
+        print("\nTesting with English texts:")
+
+    print("-" * 70)
 
     results = model.predict_batch(test_texts)
 
@@ -215,7 +292,7 @@ if __name__ == "__main__":
         label = "STRESS" if result["stress_label"] else "NON_STRESS"
         score = result["stress_score"]
         print(f"\nText: {text}")
-        print(f"Label: {label} (score: {score:.4f})")
+        print(f"Label: {label} (score: {score:.4f}, version: {result['model_version']})")
 
-    print("\n" + "="*60)
+    print("\n" + "="*70)
     print("Model test complete!")

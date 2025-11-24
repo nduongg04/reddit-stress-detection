@@ -8,18 +8,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def transform_submission(submission):
+def transform_submission(submission, search_category=None, source="praw"):
     """
     Transform PRAW submission to standardized format
 
     Args:
         submission: PRAW Submission object
+        search_category: Optional search keyword/category (for Vietnamese collection)
+        source: Data source (default: "praw", or "search" for keyword-based)
 
     Returns:
         dict: Standardized post data
     """
     try:
-        return {
+        post_data = {
             "post_id": submission.id,
             "title": submission.title,
             "body": submission.selftext or "",  # Some submissions have no body
@@ -31,9 +33,15 @@ def transform_submission(submission):
             "url": submission.url,
             "permalink": f"https://reddit.com{submission.permalink}",
             "type": "submission",
-            "source": "praw",
+            "source": source,
             "ingestion_timestamp": datetime.utcnow().isoformat()
         }
+
+        # Add search_category if provided
+        if search_category:
+            post_data["search_category"] = search_category
+
+        return post_data
     except Exception as e:
         logger.error(f"Error transforming submission {submission.id}: {e}")
         raise

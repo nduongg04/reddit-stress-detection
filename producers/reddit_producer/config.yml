@@ -1,0 +1,10 @@
+reddit:
+  account:
+    - client_id: YNJxaDp0CwfgQGe_q4HC7w
+      client_secret: FF-NTejmTnoyvID_7S8L6Y8yBgUP2A
+      user_agent: reddit_stress_detector/1.0.0 by /u/Successful_Rope7563
+
+    - client_id: "your_client_id"
+      client_secret: "your_client_secret"
+      user_agent: "your_user_agent"
+  

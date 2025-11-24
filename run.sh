@@ -59,7 +59,7 @@ trap cleanup SIGINT SIGTERM
 echo ""
 echo "======================================================================"
 echo "  Real-Time Reddit Stress Detection Pipeline"
-echo "  v4 Model + Kafka + Spark + Cassandra + Grafana"
+echo "  Vietnamese PhoBERT + Kafka + Spark + Cassandra + Grafana"
 echo "======================================================================"
 echo ""
 
@@ -90,19 +90,23 @@ else
 fi
 echo ""
 
-# Step 3: Check v4 model
-print_status "Step 3: Checking v4 model..."
-if [ -d "ml/models/reddit_stress_v4" ]; then
-    if [ -f "ml/models/reddit_stress_v4/model.safetensors" ] || [ -f "ml/models/reddit_stress_v4/pytorch_model.bin" ]; then
-        print_success "v4 model found"
+# Step 3: Check Vietnamese PhoBERT model
+print_status "Step 3: Checking Vietnamese PhoBERT model..."
+if [ -d "ml/models/vietnamese_stress_phobert" ]; then
+    if [ -f "ml/models/vietnamese_stress_phobert/model.safetensors" ] || [ -f "ml/models/vietnamese_stress_phobert/pytorch_model.bin" ]; then
+        print_success "Vietnamese PhoBERT model found"
     else
         print_error "Model weights not found"
-        print_status "Please train the model first: ./train_reddit_stress_v4.sh"
+        print_status "Please train the model first: ./train_vietnamese_stress.sh"
         exit 1
     fi
 else
-    print_error "v4 model directory not found"
-    print_status "Please train the model first: ./train_reddit_stress_v4.sh"
+    print_error "Vietnamese model directory not found"
+    print_status "Please train the model first:"
+    print_status "  1. Export data: python scripts/export_vietnamese_from_cassandra.py"
+    print_status "  2. Label data: python ml/dataset/label_vietnamese_with_ollama.py"
+    print_status "  3. Create splits: python ml/dataset/create_vietnamese_splits.py"
+    print_status "  4. Train model: ./train_vietnamese_stress.sh"
     exit 1
 fi
 echo ""

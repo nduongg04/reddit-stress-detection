@@ -193,7 +193,11 @@ def write_to_cassandra(batch_df, batch_id):
         raw_df.write \
             .format("org.apache.spark.sql.cassandra") \
             .mode("append") \
-            .options(table="raw_posts_by_day", keyspace="reddit_rt") \
+            .options(
+                table="raw_posts_by_day",
+                keyspace="reddit_rt",
+                **{"spark.cassandra.connection.host": "cassandra", "spark.cassandra.connection.port": "9042"}
+            ) \
             .save()
 
         print(f"[Batch {batch_id}] ✓ Written to raw_posts_by_day")
@@ -217,7 +221,11 @@ def write_to_cassandra(batch_df, batch_id):
         classified_df.write \
             .format("org.apache.spark.sql.cassandra") \
             .mode("append") \
-            .options(table="classified_posts_by_hour", keyspace="reddit_rt") \
+            .options(
+                table="classified_posts_by_hour",
+                keyspace="reddit_rt",
+                **{"spark.cassandra.connection.host": "cassandra", "spark.cassandra.connection.port": "9042"}
+            ) \
             .save()
 
         print(f"[Batch {batch_id}] ✓ Written to classified_posts_by_hour")
