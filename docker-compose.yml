@@ -141,6 +141,9 @@ services:
 
   # Spark Worker
   spark-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.spark
     image: reddit-spark-ml:latest
     hostname: spark-worker
     container_name: reddit-spark-worker

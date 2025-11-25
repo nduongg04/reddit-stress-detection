@@ -56,7 +56,7 @@ class ABSAModelRegistry:
     def __init__(
         self,
         registry_file: str = "/opt/ml/models/registry/registry.json",
-        default_model: str = "/opt/ml/models/vietnamese_absa_phobert_v1"
+        default_model: str = "/opt/ml/models/vietnamese_absa_sentiment_phobert_v1"
     ):
         self.registry_file = registry_file
         self.default_model = default_model
@@ -340,7 +340,7 @@ def test_model():
 
     # Initialize model
     model = ABSAStressDetectionModel(
-        default_model="ml/models/vietnamese_absa_phobert_v1",
+        default_model="ml/models/vietnamese_absa_sentiment_phobert_v1",
         aspects_file="ml/lda/absa_mental_health_aspects.json"
     )
 
