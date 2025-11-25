@@ -90,80 +90,129 @@ else
 fi
 echo ""
 
-# Step 3: Check Vietnamese PhoBERT model
-print_status "Step 3: Checking Vietnamese PhoBERT model..."
-if [ -d "ml/models/vietnamese_stress_phobert" ]; then
-    if [ -f "ml/models/vietnamese_stress_phobert/model.safetensors" ] || [ -f "ml/models/vietnamese_stress_phobert/pytorch_model.bin" ]; then
-        print_success "Vietnamese PhoBERT model found"
+# Step 3: Check Vietnamese ABSA PhoBERT model
+print_status "Step 3: Checking Vietnamese ABSA PhoBERT model..."
+if [ -d "ml/models/vietnamese_absa_sentiment_phobert_v1" ]; then
+    if [ -f "ml/models/vietnamese_absa_sentiment_phobert_v1/model.pt" ]; then
+        print_success "Vietnamese ABSA PhoBERT model found"
     else
-        print_error "Model weights not found"
-        print_status "Please train the model first: ./train_vietnamese_stress.sh"
+        print_error "Model weights not found (model.pt)"
+        print_status "Please train the ABSA model first"
         exit 1
     fi
 else
-    print_error "Vietnamese model directory not found"
-    print_status "Please train the model first:"
-    print_status "  1. Export data: python scripts/export_vietnamese_from_cassandra.py"
-    print_status "  2. Label data: python ml/dataset/label_vietnamese_with_ollama.py"
-    print_status "  3. Create splits: python ml/dataset/create_vietnamese_splits.py"
-    print_status "  4. Train model: ./train_vietnamese_stress.sh"
+    print_error "Vietnamese ABSA model directory not found"
+    print_status "Expected: ml/models/vietnamese_absa_sentiment_phobert_v1/"
+    print_status "Please train the ABSA model first"
     exit 1
 fi
 echo ""
 
-# Step 4: Check Docker services
-print_status "Step 4: Checking Docker services..."
+# Step 4: Start Docker services (fresh or existing)
+print_status "Step 4: Starting Docker services..."
 if ! docker ps &> /dev/null; then
-    print_error "Docker is not running"
+    print_error "Docker is not running. Please start Docker Desktop."
     exit 1
 fi
 
-# Check if containers are running
-if ! docker ps | grep -q "reddit-kafka"; then
-    print_warning "Docker containers not running"
-    print_status "Starting Docker services..."
-    docker-compose up -d
+# Always start services (docker-compose handles existing containers gracefully)
+print_status "Starting/Restarting Docker Compose stack..."
+docker-compose up -d
 
-    print_status "Waiting 30 seconds for services to be ready..."
-    sleep 30
-fi
+# Wait for services to be ready
+print_status "Waiting 45 seconds for services to initialize..."
+sleep 45
 
-# Verify services
-services=("reddit-kafka" "reddit-cassandra" "reddit-grafana")
+# Verify critical services
+services=("reddit-kafka" "reddit-cassandra" "reddit-spark-master")
+all_running=true
 for service in "${services[@]}"; do
     if docker ps | grep -q "$service"; then
         print_success "$service is running"
     else
-        print_error "$service is not running"
-        exit 1
+        print_error "$service failed to start"
+        all_running=false
     fi
 done
+
+if [ "$all_running" = false ]; then
+    print_error "Some services failed to start. Check: docker-compose logs"
+    exit 1
+fi
 echo ""
 
 # Step 5: Initialize Cassandra schema
 print_status "Step 5: Initializing Cassandra schema..."
+
+# Wait for Cassandra to be fully ready
+print_status "Waiting for Cassandra to be ready..."
+MAX_RETRIES=30
+RETRY_COUNT=0
+while ! docker exec reddit-cassandra cqlsh -e "DESCRIBE KEYSPACES;" &> /dev/null; do
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+        print_error "Cassandra failed to start after ${MAX_RETRIES} retries"
+        exit 1
+    fi
+    echo -n "."
+    sleep 2
+done
+echo ""
+print_success "Cassandra is ready"
+
+# Check if schema exists
 if docker exec reddit-cassandra cqlsh -e "DESCRIBE KEYSPACE reddit_rt;" &> /dev/null; then
-    print_success "Cassandra schema already exists"
+    print_success "Cassandra schema already exists (using existing schema)"
 else
-    print_status "Creating Cassandra schema..."
-    docker exec -i reddit-cassandra cqlsh < cassandra/schema/01_keyspace.cql
-    docker exec -i reddit-cassandra cqlsh < cassandra/schema/02_raw_posts_by_day.cql
-    docker exec -i reddit-cassandra cqlsh < cassandra/schema/03_classified_posts_by_hour.cql
-    docker exec -i reddit-cassandra cqlsh < cassandra/schema/04_agg_subreddit_hour.cql
-    docker exec -i reddit-cassandra cqlsh < cassandra/schema/05_agg_global_hour.cql
-    print_success "Cassandra schema created"
+    print_status "Creating fresh Cassandra schema..."
+
+    # Apply schema files in order
+    for schema_file in cassandra/schema/*.cql; do
+        if [ -f "$schema_file" ]; then
+            print_status "Applying $(basename $schema_file)..."
+            docker exec -i reddit-cassandra cqlsh < "$schema_file"
+        fi
+    done
+
+    print_success "Cassandra schema created successfully"
 fi
 echo ""
 
-# Step 6: Check Kafka topics
-print_status "Step 6: Checking Kafka topics..."
-if docker exec reddit-kafka kafka-topics --list --bootstrap-server localhost:9092 | grep -q "reddit.posts.raw.v1"; then
-    print_success "Kafka topics exist"
+# Step 6: Initialize Kafka topics
+print_status "Step 6: Initializing Kafka topics..."
+
+# Wait for Kafka to be ready
+print_status "Waiting for Kafka to be ready..."
+MAX_RETRIES=30
+RETRY_COUNT=0
+while ! docker exec reddit-kafka kafka-broker-api-versions --bootstrap-server localhost:9092 &> /dev/null; do
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+        print_error "Kafka failed to start after ${MAX_RETRIES} retries"
+        exit 1
+    fi
+    echo -n "."
+    sleep 2
+done
+echo ""
+print_success "Kafka is ready"
+
+# Create topics if they don't exist
+if docker exec reddit-kafka kafka-topics --list --bootstrap-server localhost:9092 2>/dev/null | grep -q "reddit.posts.raw.v1"; then
+    print_success "Kafka topics already exist"
 else
     print_status "Creating Kafka topics..."
-    ./scripts/init-kafka-topics.sh
-    sleep 5
-    print_success "Kafka topics created"
+
+    # Create topic directly (more reliable than script)
+    docker exec reddit-kafka kafka-topics --create \
+        --bootstrap-server localhost:9092 \
+        --topic reddit.posts.raw.v1 \
+        --partitions 3 \
+        --replication-factor 1 \
+        --config retention.ms=86400000 \
+        2>/dev/null || print_warning "Topic may already exist"
+
+    print_success "Kafka topics initialized"
 fi
 echo ""
 
@@ -210,26 +259,36 @@ fi
 print_success "Producer is running"
 echo ""
 
-# Step 8: Start Spark Streaming with ML (Docker with Custom Image)
-print_status "Step 8: Starting Spark Streaming with v4 Model (Docker)..."
+# Step 8: Start Spark Streaming with ABSA Model (Docker)
+print_status "Step 8: Starting Spark Streaming with ABSA Model (Docker)..."
 
-# Submit Spark job to Docker Spark master (which has ML libraries built in)
+# Check if Spark job is already running
+if docker exec reddit-spark-master /opt/spark/bin/spark-submit --status 2>/dev/null | grep -q "RUNNING"; then
+    print_warning "Spark job may already be running"
+    print_status "Stopping existing Spark applications..."
+    # Kill any existing Spark applications
+    docker exec reddit-spark-master pkill -f "spark-submit" || true
+    sleep 5
+fi
+
+# Submit Spark ABSA job to Docker Spark master
+print_status "Submitting Spark ABSA pipeline..."
 docker exec -d reddit-spark-master /opt/spark/bin/spark-submit \
   --master spark://spark-master:7077 \
   --packages com.datastax.spark:spark-cassandra-connector_2.12:3.5.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
   --conf spark.cassandra.connection.host=cassandra \
   --conf spark.cassandra.connection.port=9042 \
-  /opt/spark-apps/kafka_to_cassandra_with_ml.py
+  /opt/spark-apps/kafka_to_cassandra_with_absa.py
 
-print_success "Spark ML Pipeline submitted to Docker"
+print_success "Spark ABSA Pipeline submitted to Docker"
 print_status "Logs: docker logs -f reddit-spark-master"
 echo ""
 
 # Wait for Spark to initialize
-print_status "Waiting 15 seconds for Spark to initialize..."
-sleep 15
+print_status "Waiting 20 seconds for Spark ABSA pipeline to initialize..."
+sleep 20
 
-print_success "Spark ML Pipeline is running in Docker"
+print_success "Spark ABSA Pipeline is running in Docker"
 echo ""
 
 # Step 9: Display status
@@ -245,12 +304,15 @@ echo "  • Cassandra          (Docker: reddit-cassandra)"
 echo "  • Grafana            (Docker: reddit-grafana)"
 echo ""
 echo "Dashboards:"
+echo "  • Streamlit:   http://localhost:8501 (ABSA Dashboard)"
 echo "  • Grafana:     http://localhost:3000 (admin/admin)"
 echo "  • Kafka UI:    http://localhost:8080"
-echo "  • Airflow:     http://localhost:8082"
+echo "  • Spark UI:    http://localhost:8081"
+echo "  • Airflow:     http://localhost:8082 (airflow/airflow)"
 echo ""
 echo "Real-Time Data Flow:"
-echo "  Reddit → Kafka → Spark+ML(v4) → Cassandra → Grafana"
+echo "  Reddit → Kafka → Spark+ABSA → Cassandra → Streamlit/Grafana"
+echo "  Model: Vietnamese PhoBERT ABSA (Multi-label)"
 echo "  Latency: ~30-60 seconds from post to dashboard"
 echo ""
 echo "Monitoring Commands:"
@@ -292,9 +354,9 @@ while true; do
         if docker ps | grep -q "reddit-spark-master"; then
             # Check Cassandra for processed records
             CLASSIFIED_COUNT=$(docker exec reddit-cassandra cqlsh -e "SELECT COUNT(*) FROM reddit_rt.classified_posts_by_hour;" 2>/dev/null | grep -E "^\s*\d+" | tr -d ' ' || echo "0")
-            print_success "Spark ML: Running ($CLASSIFIED_COUNT posts classified)"
+            print_success "Spark ABSA: Running ($CLASSIFIED_COUNT posts classified)"
         else
-            print_error "Spark ML: Stopped"
+            print_error "Spark ABSA: Stopped"
             break
         fi
 
@@ -311,7 +373,7 @@ while true; do
 
         # Last Spark message (from Docker logs)
         LAST_SPARK=$(docker logs reddit-spark-master 2>&1 | tail -n 1 | cut -c 1-100)
-        echo "Spark ML: $LAST_SPARK"
+        echo "Spark ABSA: $LAST_SPARK"
 
         echo ""
     fi

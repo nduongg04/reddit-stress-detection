@@ -18,7 +18,7 @@ reddit:
 
 kafka:
   bootstrap_servers:
-    - kafka:9092  # Producer runs in Docker
+    - localhost:29092  # Producer runs in Docker
   topic: reddit.posts.raw.v1
   dlq_topic: reddit.posts.dlq.v1
 
