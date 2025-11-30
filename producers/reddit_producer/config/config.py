@@ -30,6 +30,11 @@ class Config:
         if not self.config['reddit'].get('subreddits'):
             raise ValueError("At least one subreddit must be specified")
 
+        # Override Kafka bootstrap_servers from environment variable if set
+        kafka_servers_env = os.environ.get('KAFKA_BOOTSTRAP_SERVERS')
+        if kafka_servers_env:
+            self.config['kafka']['bootstrap_servers'] = kafka_servers_env.split(',')
+
         # Validate Kafka config
         if not self.config['kafka'].get('bootstrap_servers'):
             raise ValueError("Kafka bootstrap_servers must be specified")

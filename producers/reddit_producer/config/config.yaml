@@ -18,7 +18,7 @@ reddit:
 
 kafka:
   bootstrap_servers:
-    - localhost:29092  # Producer runs in Docker
+    - localhost:29092  # For local runs; Docker uses KAFKA_BOOTSTRAP_SERVERS env var
   topic: reddit.posts.raw.v1
   dlq_topic: reddit.posts.dlq.v1
 

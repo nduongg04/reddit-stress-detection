@@ -116,7 +116,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.spark
-    image: reddit-spark-ml:latest
+    # image: reddit-spark-ml:latest
     hostname: spark-master
     container_name: reddit-spark-master
     ports:
@@ -144,7 +144,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.spark
-    image: reddit-spark-ml:latest
+    # image: reddit-spark-ml:latest
     hostname: spark-worker
     container_name: reddit-spark-worker
     depends_on:
@@ -172,6 +172,7 @@ services:
       REDDIT_CLIENT_ID: ${REDDIT_CLIENT_ID}
       REDDIT_CLIENT_SECRET: ${REDDIT_CLIENT_SECRET}
       REDDIT_USER_AGENT: ${REDDIT_USER_AGENT}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     volumes:
       - ./producers/reddit_producer/config:/app/config
       - ./logs:/app/logs
