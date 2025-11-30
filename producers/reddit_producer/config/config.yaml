@@ -6,7 +6,7 @@ reddit:
   collection_mode: "vozforums_stress"
 
   # Target posts (mode-specific)
-  target_posts: 1000  # Continuous collection for testing streaming
+  target_posts: 1000 # Continuous collection for testing streaming
 
   # Not used in Vietnamese mode but required
   subreddits:
@@ -14,11 +14,11 @@ reddit:
   stream_types:
     - submissions
   skip_existing: true
-  posts_per_minute: 10  # Demo: 10 posts/minute
+  posts_per_minute: 10 # Demo: 10 posts/minute
 
 kafka:
   bootstrap_servers:
-    - localhost:29092  # Producer runs in Docker
+    - kafka:9092 #localhost:29092  # Producer runs in Docker
   topic: reddit.posts.raw.v1
   dlq_topic: reddit.posts.dlq.v1
 
@@ -28,7 +28,7 @@ producer:
   request_timeout_ms: 30000
 
 rate_limiting:
-  requests_per_minute: 100  # Reddit's max QPM
+  requests_per_minute: 100 # Reddit's max QPM
   burst_limit: 50
   window_minutes: 10
 
