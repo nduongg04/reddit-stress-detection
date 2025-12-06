@@ -245,6 +245,8 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
+      - ./ml:/opt/airflow/ml
+      - ./utils:/opt/airflow/utils
       - airflow-data:/opt/airflow
     command: webserver
     networks:
@@ -273,6 +275,8 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
+      - ./ml:/opt/airflow/ml
+      - ./utils:/opt/airflow/utils
       - airflow-data:/opt/airflow
     command: scheduler
     networks:

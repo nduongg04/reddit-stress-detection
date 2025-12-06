@@ -102,6 +102,7 @@ print(f"  Aspects path: {ASPECTS_PATH}")
 # Create UDF for batch prediction (loads model per partition)
 @udf(StructType([
     StructField("aspect_sentiments", MapType(StringType(), IntegerType()), True),
+    StructField("confidence_scores", MapType(StringType(), DoubleType()), True),
     StructField("stress_score", DoubleType(), True),
     StructField("stress_label", BooleanType(), True),
     StructField("model_version", StringType(), True)
@@ -110,7 +111,7 @@ def predict_absa_udf(text):
     """
     Predict ABSA aspects for text (model loaded lazily per worker)
 
-    Returns dict with predictions
+    Returns dict with predictions including confidence scores
     """
     # Lazy import to avoid serialization issues
     import sys
@@ -130,6 +131,7 @@ def predict_absa_udf(text):
     if not text or text.strip() == "":
         return {
             'aspect_sentiments': {},
+            'confidence_scores': {},
             'stress_score': 0.0,
             'stress_label': False,
             'model_version': 'vietnamese_absa_phobert_v1'
@@ -142,6 +144,7 @@ def predict_absa_udf(text):
     except Exception as e:
         return {
             'aspect_sentiments': {},
+            'confidence_scores': {},
             'stress_score': 0.0,
             'stress_label': False,
             'model_version': f'error: {str(e)[:50]}'
@@ -164,6 +167,7 @@ ml_df = transformed_df \
         col("author_hash"),
         col("permalink"),
         col("prediction.aspect_sentiments").alias("aspect_sentiments"),
+        col("prediction.confidence_scores").alias("confidence_scores"),
         col("prediction.model_version").alias("model_version"),
         col("type").alias("kind"),
         col("ingest_ts").alias("processed_ts")
@@ -191,7 +195,7 @@ def write_to_cassandra(df, epoch_id):
 
     # Show sample predictions
     print(f"[Batch {epoch_id}] Sample predictions:")
-    df.select("subreddit", "title", "aspect_sentiments") \
+    df.select("subreddit", "title", "aspect_sentiments", "confidence_scores") \
         .show(5, truncate=80)
 
     # Write to Cassandra

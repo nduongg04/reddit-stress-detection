@@ -1,0 +1,16 @@
+# Airflow specific ignores for custom build
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.log
+.git/
+.gitignore
+.env
+*.md
+logs/
+.DS_Store

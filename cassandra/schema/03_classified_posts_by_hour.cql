@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS classified_posts_by_hour (
 
     -- ABSA ML classification results
     aspect_sentiments map<text, int>,  -- Aspect → Sentiment mapping (aspect_name → -1/0/1)
+    confidence_scores map<text, double>,  -- Aspect → Confidence score (aspect_name → 0.0-1.0)
     model_version text,                -- Model version for tracking
 
     -- Processing metadata

@@ -1,0 +1,14 @@
+{
+  "models": [
+    {
+      "version": "v1",
+      "model_dir": "/opt/ml/models/vietnamese_absa_sentiment_phobert_v1",
+      "trained_at": "2025-11-21T01:59:42.764042",
+      "total_samples": 243,
+      "test_f1_micro": 0.947,
+      "test_f1_macro": 0.947,
+      "active": true,
+      "notes": "Initial baseline model trained on vozforums data"
+    }
+  ]
+}
