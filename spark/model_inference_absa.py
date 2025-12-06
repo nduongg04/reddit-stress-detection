@@ -24,13 +24,16 @@ logger = logging.getLogger(__name__)
 
 
 class PhoBERTMultiLabelClassifier(nn.Module):
-    """PhoBERT with multi-label classification head"""
+    """PhoBERT with multi-aspect sentiment classification (10 aspects × 3 classes)"""
 
-    def __init__(self, model_name, num_labels):
+    def __init__(self, model_name, num_aspects=10, num_classes=3, dropout=0.3):
         super().__init__()
         self.phobert = AutoModel.from_pretrained(model_name)
-        self.dropout = nn.Dropout(0.3)
-        self.classifier = nn.Linear(self.phobert.config.hidden_size, num_labels)
+        self.dropout = nn.Dropout(dropout)
+        self.num_aspects = num_aspects
+        self.num_classes = num_classes
+        # Output: 10 aspects × 3 classes = 30 logits
+        self.classifier = nn.Linear(self.phobert.config.hidden_size, num_aspects * num_classes)
 
     def forward(self, input_ids, attention_mask):
         outputs = self.phobert(
@@ -40,6 +43,11 @@ class PhoBERTMultiLabelClassifier(nn.Module):
         pooled_output = outputs.last_hidden_state[:, 0, :]
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
+        
+        # Reshape to (batch_size, num_aspects, num_classes)
+        batch_size = logits.size(0)
+        logits = logits.view(batch_size, self.num_aspects, self.num_classes)
+        
         return logits
 
 
@@ -203,8 +211,13 @@ class ABSAStressDetectionModel:
             # Load tokenizer
             self.tokenizer = AutoTokenizer.from_pretrained(model_path)
 
-            # Load model architecture (30 labels = 10 aspects × 3 sentiments)
-            self.model = PhoBERTMultiLabelClassifier('vinai/phobert-base-v2', num_labels=30)
+            # Load model architecture (10 aspects × 3 sentiments = 30 logits)
+            self.model = PhoBERTMultiLabelClassifier(
+                'vinai/phobert-base-v2', 
+                num_aspects=10, 
+                num_classes=3,
+                dropout=0.3
+            )
 
             # Load weights
             weights_path = os.path.join(model_path, 'model.pt')
@@ -281,23 +294,28 @@ class ABSAStressDetectionModel:
                 attention_mask = encoding['attention_mask'].to(self.device)
 
                 # Forward pass
-                logits = self.model(input_ids, attention_mask)
+                logits = self.model(input_ids, attention_mask)  # Shape: [1, 10, 3]
 
-                # Reshape logits: [30] → [10 aspects, 3 sentiments]
-                # Format: [aspect0_neg, aspect0_neu, aspect0_pos, aspect1_neg, ...]
-                logits_reshaped = logits.squeeze().view(10, 3).cpu()
+                # logits already in shape [batch=1, 10 aspects, 3 sentiments]
+                # Squeeze batch dimension: [10, 3]
+                logits_aspect_sentiment = logits.squeeze(0).cpu()
 
                 # Softmax over sentiments for each aspect
-                probs = torch.softmax(logits_reshaped, dim=1).numpy()
+                probs = torch.softmax(logits_aspect_sentiment, dim=1).numpy()  # Shape: [10, 3]
 
                 # Get predicted sentiment for each aspect (-1, 0, 1)
                 sentiment_labels = probs.argmax(axis=1) - 1  # [0,1,2] → [-1,0,1]
 
                 # Build aspect → sentiment map (only include non-neutral)
                 aspect_sentiments = {}
+                confidence_scores = {}  # Confidence score for each aspect
                 for i, sentiment in enumerate(sentiment_labels):
-                    if sentiment != 0:  # Skip neutral
-                        aspect_name = self.aspects[i]['aspect_name']
+                    aspect_name = self.aspects[i]['aspect_name']
+                    # Get confidence (probability of predicted class)
+                    confidence = float(probs[i, sentiment_labels[i] + 1])  # +1 because [-1,0,1] mapped to [0,1,2]
+                    confidence_scores[aspect_name] = confidence
+                    
+                    if sentiment != 0:  # Skip neutral in aspect_sentiments
                         aspect_sentiments[aspect_name] = int(sentiment)
 
                 # Overall stress score: max probability of negative sentiment
@@ -310,6 +328,7 @@ class ABSAStressDetectionModel:
 
                 predictions.append({
                     'aspect_sentiments': aspect_sentiments,
+                    'confidence_scores': confidence_scores,  # Add confidence scores
                     'stress_score': stress_score,
                     'stress_label': stress_label,
                     'model_version': self.registry.current_version or 'vietnamese_absa_phobert_v1'

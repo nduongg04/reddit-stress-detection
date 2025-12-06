@@ -166,21 +166,31 @@ Chỉ trả về JSON, không giải thích thêm."""
 
     def call_ollama(self, prompt: str) -> Dict:
         """
-        Call Ollama API with retry logic
+        Call Ollama API via HTTP with retry logic
 
         Returns:
             Dict with {aspects, confidence, corrected}
         """
+        import os
+        import requests
+        
+        # Get Ollama host from environment (set in docker-compose)
+        ollama_host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+        
         for attempt in range(self.max_retries):
             try:
-                result = subprocess.run(
-                    ['ollama', 'run', self.model_name],
-                    input=prompt.encode('utf-8'),
-                    capture_output=True,
-                    timeout=45
+                # Call Ollama HTTP API
+                response = requests.post(
+                    f'{ollama_host}/api/generate',
+                    json={
+                        'model': self.model_name,
+                        'prompt': prompt,
+                        'stream': False
+                    },
+                    timeout=60
                 )
-
-                output = result.stdout.decode('utf-8').strip()
+                response.raise_for_status()
+                output = response.json().get('response', '').strip()
 
                 # Try to extract JSON (multiple strategies)
                 # Strategy 1: Find JSON with "aspects" key
@@ -220,7 +230,11 @@ Chỉ trả về JSON, không giải thích thêm."""
                 # Give up - return empty
                 return {"aspects": [], "confidence": 0.0, "corrected": False}
 
-            except subprocess.TimeoutExpired:
+            except requests.exceptions.Timeout:
+                if attempt < self.max_retries - 1:
+                    continue
+                return {"aspects": [], "confidence": 0.0, "corrected": False}
+            except requests.exceptions.RequestException as e:
                 if attempt < self.max_retries - 1:
                     continue
                 return {"aspects": [], "confidence": 0.0, "corrected": False}

@@ -22,6 +22,7 @@ Model Versioning: Timestamped models with performance tracking
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
+from airflow.exceptions import AirflowSkipException
 from datetime import datetime, timedelta
 import json
 import os
@@ -59,10 +60,10 @@ dag = DAG(
 
 def fetch_recent_posts(**context):
     """
-    Task 1: Fetch posts from Cassandra (last 24 hours)
+    Task 1: Fetch LOW-CONFIDENCE posts from Cassandra (last 24 hours)
 
-    Returns posts that were processed by Spark in the last day
-    to be used for active learning selection
+    Fetches posts with low confidence scores (< 0.5) to be re-labeled by Ollama
+    Using ABSA model's confidence_scores map
     """
     from cassandra.cluster import Cluster
 
@@ -74,11 +75,11 @@ def fetch_recent_posts(**context):
     now = datetime.utcnow()
     yesterday = now - timedelta(days=1)
 
-    # Fetch posts from last 24 hours
-    # Use classified_posts_by_hour table which has model predictions
+    # Fetch posts from last 24 hours from ABSA table
     query = """
         SELECT post_id, title, body, subreddit,
-               stress_score, stress_label, created_utc, hour_partition
+               aspect_sentiments, confidence_scores, model_version,
+               created_utc, hour_partition
         FROM classified_posts_by_hour
         WHERE subreddit = 'vozforums'
           AND hour_partition >= %s
@@ -96,19 +97,30 @@ def fetch_recent_posts(**context):
         if row.body:
             text += row.body
 
-        if text.strip():
-            posts.append({
-                'post_id': row.post_id,
-                'text': text.strip(),
-                'subreddit': row.subreddit,
-                'stress_score': float(row.stress_score) if row.stress_score else 0.0,
-                'stress_label': bool(row.stress_label) if row.stress_label else False,
-                'created_utc': row.created_utc
-            })
+        if text.strip() and row.confidence_scores:
+            # Calculate min confidence across all aspects
+            confidence_values = list(row.confidence_scores.values())
+            min_confidence = min(confidence_values) if confidence_values else 1.0
+            
+            # Only include LOW confidence posts (< 0.5)
+            if min_confidence < 0.5:
+                posts.append({
+                    'post_id': row.post_id,
+                    'text': text.strip(),
+                    'subreddit': row.subreddit,
+                    'aspect_sentiments': dict(row.aspect_sentiments) if row.aspect_sentiments else {},
+                    'confidence_scores': dict(row.confidence_scores) if row.confidence_scores else {},
+                    'min_confidence': min_confidence,
+                    'model_version': row.model_version,
+                    'created_utc': row.created_utc
+                })
 
     cluster.shutdown()
 
-    print(f"✓ Fetched {len(posts)} posts from last 24 hours")
+    print(f"✓ Fetched {len(posts)} LOW-CONFIDENCE posts (confidence < 0.5) from last 24 hours")
+    if posts:
+        avg_confidence = np.mean([p['min_confidence'] for p in posts])
+        print(f"  Average min confidence: {avg_confidence:.3f}")
 
     # Save to XCom
     context['task_instance'].xcom_push(key='recent_posts', value=posts)
@@ -118,9 +130,10 @@ def fetch_recent_posts(**context):
 
 def run_inference(**context):
     """
-    Task 2: Run PhoBERT inference on recent posts
+    Task 2: Run PhoBERT ABSA inference on low-confidence posts
 
-    Returns predictions with probabilities for uncertainty calculation
+    Re-runs inference to get fresh probabilities for uncertainty calculation
+    Uses vietnamese_absa_sentiment_phobert_v1 (30 labels = 10 aspects × 3 sentiments)
     """
     from transformers import AutoTokenizer, AutoModel
     from torch import nn
@@ -132,33 +145,43 @@ def run_inference(**context):
     )
 
     if not posts or len(posts) == 0:
-        print("No posts to process")
-        return 0
+        print("No low-confidence posts to process")
+        raise AirflowSkipException("No low-confidence posts found in the last 24 hours")
 
-    print(f"Running inference on {len(posts)} posts...")
+    # Limit to top 100 to avoid RAM overflow
+    if len(posts) > 100:
+        posts = sorted(posts, key=lambda x: x['min_confidence'])[:100]
+        print(f"Limited to 100 lowest-confidence posts")
 
-    # Load current model
-    model_dir = '/opt/airflow/ml/models/vietnamese_absa_phobert_v1'
+    print(f"Running ABSA inference on {len(posts)} posts...")
+
+    # Load current ABSA model (30 labels)
+    model_dir = '/opt/ml/models/vietnamese_absa_sentiment_phobert_v1'
 
     # Load tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
 
-    # Reconstruct model architecture
+    # Reconstruct ABSA model architecture (10 aspects × 3 sentiments = 30 logits)
     class PhoBERTMultiLabelClassifier(nn.Module):
-        def __init__(self, model_name, num_labels):
+        def __init__(self, model_name, num_aspects=10, num_classes=3, dropout=0.3):
             super().__init__()
             self.phobert = AutoModel.from_pretrained(model_name)
-            self.dropout = nn.Dropout(0.3)
-            self.classifier = nn.Linear(self.phobert.config.hidden_size, num_labels)
+            self.dropout = nn.Dropout(dropout)
+            self.num_aspects = num_aspects
+            self.num_classes = num_classes
+            self.classifier = nn.Linear(self.phobert.config.hidden_size, num_aspects * num_classes)
 
         def forward(self, input_ids, attention_mask):
             outputs = self.phobert(input_ids=input_ids, attention_mask=attention_mask)
             pooled_output = outputs.last_hidden_state[:, 0, :]
             pooled_output = self.dropout(pooled_output)
             logits = self.classifier(pooled_output)
+            # Reshape to (batch_size, num_aspects, num_classes)
+            batch_size = logits.size(0)
+            logits = logits.view(batch_size, self.num_aspects, self.num_classes)
             return logits
 
-    model = PhoBERTMultiLabelClassifier('vinai/phobert-base-v2', num_labels=10)
+    model = PhoBERTMultiLabelClassifier('vinai/phobert-base-v2', num_aspects=10, num_classes=3)
     model.load_state_dict(torch.load(f'{model_dir}/model.pt', map_location='cpu'))
     model.eval()
 
@@ -174,16 +197,20 @@ def run_inference(**context):
                 return_tensors='pt'
             )
 
-            logits = model(encoding['input_ids'], encoding['attention_mask'])
-            probs = torch.sigmoid(logits).squeeze().numpy()
+            logits = model(encoding['input_ids'], encoding['attention_mask'])  # Shape: [1, 10, 3]
+            # logits already in shape [batch=1, 10 aspects, 3 sentiments]
+            logits_aspect_sentiment = logits.squeeze(0)  # Shape: [10, 3]
+            # Softmax over sentiments for each aspect
+            probs = torch.softmax(logits_aspect_sentiment, dim=1).numpy()  # Shape: [10, 3]
 
             predictions.append({
                 'post_id': post['post_id'],
                 'text': post['text'],
-                'probabilities': probs.tolist()
+                'probabilities': probs.tolist(),  # List of 10 aspects, each with 3 probs
+                'original_confidence': post['min_confidence']
             })
 
-    print(f"✓ Generated {len(predictions)} predictions")
+    print(f"✓ Generated {len(predictions)} ABSA predictions")
 
     # Save predictions to XCom
     context['task_instance'].xcom_push(key='predictions', value=predictions)
@@ -208,7 +235,7 @@ def select_uncertain_predictions(**context):
 
     if not predictions or len(predictions) == 0:
         print("No predictions to process")
-        return 0
+        raise AirflowSkipException("No predictions generated")
 
     print(f"Selecting uncertain predictions from {len(predictions)} predictions...")
 
@@ -257,7 +284,7 @@ def validate_with_ollama(**context):
 
     if not uncertain_samples or len(uncertain_samples) == 0:
         print("No uncertain samples to validate")
-        return 0
+        raise AirflowSkipException("No uncertain samples found")
 
     print(f"Validating {len(uncertain_samples)} uncertain predictions with Ollama...")
 
@@ -285,15 +312,23 @@ def validate_with_ollama(**context):
     output_file = f'{output_dir}/validated_{timestamp}.csv'
 
     # Create DataFrame
+    # Aspect names matching training script format
+    aspect_names = [
+        'công_việc', 'giấc_ngủ_thuốc', 'giao_tiếp', 'thiếu_năng_lượng',
+        'căng_thẳng_tài_chính', 'tình_yêu', 'tự_suy_ngẫm', 'trầm_cảm',
+        'gia_đình', 'tìm_kiếm_giúp_đỡ'
+    ]
+    
     rows = []
     for v in validated:
         row = {
             'post_id': f"active_learning_{timestamp}_{v['index']}",
             'text': v['text'],
         }
-        # Add label columns
+        # Add sentiment columns matching training script format
+        # Format: sentiment_0_công_việc, sentiment_1_giấc_ngủ_thuốc, etc.
         for i in range(10):
-            row[f'label_{i}'] = v['validated_labels'][i]
+            row[f'sentiment_{i}_{aspect_names[i]}'] = v['validated_labels'][i]
 
         row['uncertainty'] = v['uncertainty']
         row['confidence'] = v['confidence']
@@ -336,6 +371,10 @@ def retrain_model(**context):
         key='validated_count'
     )
 
+    if not validated_count or validated_count == 0:
+        print("No new validated samples. Skipping retraining.")
+        raise AirflowSkipException("No new data to retrain")
+
     print(f"Retraining model with {validated_count} new samples...")
 
     # Load original training data
@@ -359,9 +398,9 @@ def retrain_model(**context):
         # Update config to use combined data
         CONFIG['data_file'] = combined_file
 
-    # Create new model version directory
+    # Create new model version directory in shared volume
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    new_model_dir = f'/opt/airflow/ml/models/vietnamese_absa_phobert_{timestamp}'
+    new_model_dir = f'/opt/ml/models/vietnamese_absa_phobert_{timestamp}'
     CONFIG['output_dir'] = new_model_dir
 
     print(f"Training new model version: {new_model_dir}")
@@ -410,9 +449,11 @@ def update_model_registry(**context):
 
     print(f"Updating model registry with version {model_version}...")
 
-    registry_file = '/opt/airflow/ml/models/registry/registry.json'
+    # Use shared volume path that Spark can access
+    registry_file = '/opt/ml/models/registry/registry.json'
 
     # Load existing registry
+    os.makedirs(os.path.dirname(registry_file), exist_ok=True)
     if os.path.exists(registry_file):
         with open(registry_file, 'r') as f:
             registry = json.load(f)
