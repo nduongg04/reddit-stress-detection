@@ -1,0 +1,41 @@
+# Dockerfile for Airflow with ML capabilities
+# Extends official Airflow image with ML dependencies for retraining
+
+FROM apache/airflow:2.7.3-python3.11
+
+USER root
+
+# Install system dependencies for ML
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    build-essential \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+# Install ML dependencies for retraining
+RUN pip install --no-cache-dir \
+    torch==2.0.1 \
+    transformers==4.35.0 \
+    accelerate==0.26.0 \
+    scikit-learn==1.3.2 \
+    pandas==2.1.4 \
+    numpy==1.24.4 \
+    cassandra-driver==3.29.2 \
+    requests==2.31.0 \
+    tqdm==4.66.1
+
+# Copy Airflow-specific requirements
+COPY airflow/requirements.txt /tmp/airflow-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/airflow-requirements.txt || true
+
+# Set working directory
+WORKDIR /opt/airflow
+
+# Expose Airflow webserver port
+EXPOSE 8080
+
+# Default command (will be overridden by docker-compose)
+CMD ["airflow", "webserver"]

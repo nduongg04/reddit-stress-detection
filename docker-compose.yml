@@ -222,12 +222,19 @@ services:
 
   # Airflow Webserver
   airflow-webserver:
-    image: apache/airflow:2.7.3
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    image: reddit-airflow-ml:latest
     hostname: airflow-webserver
     container_name: reddit-airflow-webserver
     depends_on:
       airflow-postgres:
         condition: service_healthy
+      cassandra:
+        condition: service_healthy
+      ollama:
+        condition: service_started
     ports:
       - "8082:8080"
     environment:
@@ -241,6 +248,8 @@ services:
       _AIRFLOW_WWW_USER_CREATE: "true"
       _AIRFLOW_WWW_USER_USERNAME: airflow
       _AIRFLOW_WWW_USER_PASSWORD: airflow
+      # Ollama connection
+      OLLAMA_HOST: http://ollama:11434
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -259,18 +268,27 @@ services:
 
   # Airflow Scheduler
   airflow-scheduler:
-    image: apache/airflow:2.7.3
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    image: reddit-airflow-ml:latest
     hostname: airflow-scheduler
     container_name: reddit-airflow-scheduler
     depends_on:
       airflow-postgres:
         condition: service_healthy
+      cassandra:
+        condition: service_healthy
+      ollama:
+        condition: service_started
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
       AIRFLOW__CORE__FERNET_KEY: ""
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      # Ollama connection
+      OLLAMA_HOST: http://ollama:11434
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
@@ -281,6 +299,25 @@ services:
     command: scheduler
     networks:
       - reddit-network
+
+  # Ollama LLM for Active Learning validation
+  ollama:
+    image: ollama/ollama:latest
+    hostname: ollama
+    container_name: reddit-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - reddit-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # Streamlit Dashboard
   streamlit:
@@ -314,6 +351,7 @@ volumes:
   grafana-data:
   airflow-postgres-data:
   airflow-data:
+  ollama-data:
 
 networks:
   reddit-network:
