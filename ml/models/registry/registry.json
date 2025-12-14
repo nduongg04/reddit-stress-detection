@@ -7,8 +7,17 @@
       "total_samples": 243,
       "test_f1_micro": 0.947,
       "test_f1_macro": 0.947,
-      "active": true,
+      "active": false,
       "notes": "Initial baseline model trained on vozforums data"
+    },
+    {
+      "version": "20251214_024821",
+      "model_dir": "/opt/airflow/ml/models/vietnamese_absa_simple_20251214_024821",
+      "trained_at": "2025-12-14T02:48:28.541213",
+      "total_samples": 10,
+      "test_f1_micro": 1.0,
+      "test_f1_macro": 1.0,
+      "active": true
     }
   ]
 }

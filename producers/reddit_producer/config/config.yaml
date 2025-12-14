@@ -3,17 +3,17 @@ reddit:
   # - "vietnamese": General Vietnamese keyword collection (stress + non-stress)
   # - "vozforums_stress": r/vozforums stress posts only (for clean training data)
   # - "subreddit": Traditional subreddit streaming
-  collection_mode: "vozforums_stress"
+  collection_mode: "subreddit"
 
-  # Target posts (mode-specific)
-  target_posts: 1000 # Continuous collection for testing streaming
+  # Target posts (mode-specific) - set to -1 for continuous streaming
+  # target_posts: -1 # Infinite continuous streaming
 
   # Not used in Vietnamese mode but required
   subreddits:
-    - all
+    - vozforums
   stream_types:
     - submissions
-  skip_existing: true
+  skip_existing: false
   posts_per_minute: 10 # Demo: 10 posts/minute
 
 kafka:

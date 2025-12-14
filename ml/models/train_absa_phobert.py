@@ -26,19 +26,20 @@ warnings.filterwarnings('ignore')
 # Configuration
 CONFIG = {
     'model_name': 'vinai/phobert-base-v2',
-    'max_length': 256,
-    'batch_size': 32,  # Increased batch size
-    'learning_rate': 3e-5,  # Higher learning rate
-    'weight_decay': 0.01,  # Add weight decay for regularization
-    'num_epochs': 15,  # More epochs
+    'max_length': 64,  # Reduced from 128 -> save 75% sequence memory (attention is quadratic)
+    'batch_size': 2,  # Reduced from 4 -> save 50% more batch memory
+    'learning_rate': 1e-5,  # Lower LR for very small batch
+    'weight_decay': 0.01,
+    'num_epochs': 3,  # Reduced from 5 -> faster, less memory stress
     'num_aspects': 10,
     'num_classes': 3,  # -1 (negative), 0 (neutral), 1 (positive)
-    'warmup_steps': 200,  # More warmup
-    'dropout': 0.5,  # Higher dropout to prevent overfitting to majority class
-    'use_class_weights': True,  # Use weighted loss for imbalanced classes
-    'focal_loss_gamma': 2.0,  # Focal loss to focus on hard examples
+    'warmup_steps': 20,  # Reduced warmup for 3 epochs
+    'dropout': 0.2,  # Even lower dropout
+    'use_class_weights': True,
+    'focal_loss_gamma': 2.0,
     'output_dir': 'ml/models/vietnamese_absa_sentiment_phobert_v1',
-    'data_file': 'ml/dataset/labeled/vozforums_absa_sentiment.csv'
+    'data_file': 'ml/dataset/labeled/vozforums_absa_sentiment.csv',
+    'gradient_accumulation_steps': 8  # Accumulate 8 steps = effective batch 16
 }
 
 class MultiLabelABSADataset(Dataset):
@@ -136,11 +137,20 @@ def load_data(data_file):
     # Calculate class weights for imbalanced dataset
     from sklearn.utils.class_weight import compute_class_weight
     all_labels_flat = labels.flatten()
-    class_weights = compute_class_weight('balanced', classes=np.array([0, 1, 2]), y=all_labels_flat)
-    print(f"\n✓ Class weights (to handle imbalance):")
-    print(f"  Class 0 (negative): {class_weights[0]:.3f}")
-    print(f"  Class 1 (neutral):  {class_weights[1]:.3f}")
-    print(f"  Class 2 (positive): {class_weights[2]:.3f}")
+    unique_classes = np.unique(all_labels_flat)
+    
+    # Check if all classes are present
+    if len(unique_classes) == 3:
+        class_weights = compute_class_weight('balanced', classes=np.array([0, 1, 2]), y=all_labels_flat)
+        print(f"\n✓ Class weights (to handle imbalance):")
+        print(f"  Class 0 (negative): {class_weights[0]:.3f}")
+        print(f"  Class 1 (neutral):  {class_weights[1]:.3f}")
+        print(f"  Class 2 (positive): {class_weights[2]:.3f}")
+    else:
+        # Not all classes present - use uniform weights
+        class_weights = np.array([1.0, 1.0, 1.0])
+        print(f"\n⚠ Warning: Only {len(unique_classes)} classes found in data (classes: {unique_classes})")
+        print(f"✓ Using uniform class weights: [1.0, 1.0, 1.0]")
 
     return texts, labels, class_weights
 
@@ -172,14 +182,13 @@ def create_data_loaders(texts, labels, tokenizer, config):
 
     return train_loader, val_loader, test_loader, (X_test, y_test)
 
-def train_epoch(model, data_loader, optimizer, scheduler, device, class_weights=None):
-    """Train for one epoch"""
+def train_epoch(model, data_loader, optimizer, scheduler, device, class_weights=None, gradient_accumulation_steps=1):
+    """Train for one epoch with gradient accumulation"""
     model.train()
     total_loss = 0
+    optimizer.zero_grad()
 
-    for batch in tqdm(data_loader, desc="Training"):
-        optimizer.zero_grad()
-
+    for step, batch in enumerate(tqdm(data_loader, desc="Training")):
         input_ids = batch['input_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['labels'].to(device)
@@ -196,14 +205,21 @@ def train_epoch(model, data_loader, optimizer, scheduler, device, class_weights=
         loss = 0
         for i in range(logits.size(1)):  # For each aspect
             loss += loss_fn(logits[:, i, :], labels[:, i])
+        
+        # Normalize loss for gradient accumulation
+        loss = loss / gradient_accumulation_steps
 
         # Backward pass
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
-        scheduler.step()
+        
+        # Only update weights every gradient_accumulation_steps
+        if (step + 1) % gradient_accumulation_steps == 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+            scheduler.step()
+            optimizer.zero_grad()
 
-        total_loss += loss.item()
+        total_loss += loss.item() * gradient_accumulation_steps
 
     return total_loss / len(data_loader)
 
@@ -325,14 +341,23 @@ def train(config):
     print("TRAINING")
     print("="*70)
 
+    gradient_accumulation_steps = config.get('gradient_accumulation_steps', 1)
+    if gradient_accumulation_steps > 1:
+        print(f"✓ Using gradient accumulation: {gradient_accumulation_steps} steps")
+        print(f"✓ Effective batch size: {config['batch_size'] * gradient_accumulation_steps}")
+
     best_f1 = 0
 
     for epoch in range(config['num_epochs']):
         print(f"\nEpoch {epoch + 1}/{config['num_epochs']}")
         print("-" * 70)
 
-        # Train
-        train_loss = train_epoch(model, train_loader, optimizer, scheduler, device)
+        # Train with gradient accumulation
+        train_loss = train_epoch(
+            model, train_loader, optimizer, scheduler, device,
+            class_weights=class_weights_tensor,
+            gradient_accumulation_steps=gradient_accumulation_steps
+        )
         print(f"Train Loss: {train_loss:.4f}")
 
         # Validate

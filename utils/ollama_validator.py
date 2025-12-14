@@ -105,12 +105,25 @@ class OllamaValidator:
 
         uncertain_samples = []
         for idx in uncertain_indices:
-            if uncertainties[idx] >= self.uncertainty_threshold:
+            # Convert idx to scalar - handle multi-dimensional arrays
+            if isinstance(idx, np.ndarray):
+                idx_scalar = int(idx.flatten()[0])
+            else:
+                idx_scalar = int(idx)
+            
+            # Convert uncertainty to scalar - handle multi-dimensional arrays
+            uncertainty_arr = uncertainties[idx_scalar]
+            if isinstance(uncertainty_arr, np.ndarray):
+                uncertainty_value = float(uncertainty_arr.item() if uncertainty_arr.size == 1 else uncertainty_arr.flatten()[0])
+            else:
+                uncertainty_value = float(uncertainty_arr)
+            
+            if uncertainty_value >= self.uncertainty_threshold:
                 uncertain_samples.append({
-                    'index': int(idx),
-                    'text': texts[idx],
-                    'prediction': predictions[idx].tolist(),
-                    'uncertainty': float(uncertainties[idx])
+                    'index': idx_scalar,
+                    'text': texts[idx_scalar],
+                    'prediction': predictions[idx_scalar].tolist() if isinstance(predictions[idx_scalar], np.ndarray) else predictions[idx_scalar],
+                    'uncertainty': uncertainty_value
                 })
 
         return uncertain_samples
@@ -128,9 +141,15 @@ class OllamaValidator:
         aspect_list = []
         for i, asp in enumerate(self.aspects):
             prob = prediction[i]
-            predicted = "✓" if prob > 0.5 else "✗"
+            # Handle case where prob might be a list/array
+            if isinstance(prob, (list, np.ndarray)):
+                prob_value = float(prob[0] if isinstance(prob, list) else prob.flatten()[0])
+            else:
+                prob_value = float(prob)
+            
+            predicted = "✓" if prob_value > 0.5 else "✗"
             aspect_list.append(
-                f"{i}. [{predicted}] {asp['aspect_name']} (model: {prob:.2f}) - {asp['mental_health_relevance']}"
+                f"{i}. [{predicted}] {asp['aspect_name']} (model: {prob_value:.2f}) - {asp['mental_health_relevance']}"
             )
 
         prompt = f"""Bạn là chuyên gia phân tích sức khỏe tâm thần. Model AI đã phân tích bài viết dưới đây nhưng không chắc chắn. Hãy kiểm tra và sửa lại nếu cần.
