@@ -1,0 +1,25 @@
+{
+  "version": "20251214_024821",
+  "trained_at": "2025-12-14T02:48:28.541213",
+  "original_samples": 0,
+  "validated_samples": 10,
+  "total_samples": 10,
+  "model_dir": "/opt/airflow/ml/models/vietnamese_absa_simple_20251214_024821",
+  "config": {
+    "tokenizer_name": "vinai/phobert-base-v2",
+    "vocab_size": 64000,
+    "embedding_dim": 128,
+    "hidden_dim": 128,
+    "num_layers": 2,
+    "max_length": 128,
+    "batch_size": 8,
+    "learning_rate": 0.001,
+    "weight_decay": 0.01,
+    "num_epochs": 3,
+    "num_aspects": 10,
+    "num_classes": 3,
+    "dropout": 0.3,
+    "output_dir": "/opt/airflow/ml/models/vietnamese_absa_simple_20251214_024821",
+    "data_file": "/opt/airflow/ml/dataset/labeled/combined_20251214_024821.csv"
+  }
+}
