@@ -239,8 +239,6 @@ services:
         condition: service_healthy
       cassandra:
         condition: service_healthy
-      ollama:
-        condition: service_started
     ports:
       - "8082:8080"
     environment:
@@ -254,8 +252,8 @@ services:
       _AIRFLOW_WWW_USER_CREATE: "true"
       _AIRFLOW_WWW_USER_USERNAME: airflow
       _AIRFLOW_WWW_USER_PASSWORD: airflow
-      # Ollama connection
-      OLLAMA_HOST: http://ollama:11434
+      # Groq Cloud API for weak labeling
+      GROQ_API_KEY: ${GROQ_API_KEY}
       # Increase timeouts to handle torch imports (30s)
       AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: 60
       AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: 300
@@ -288,16 +286,14 @@ services:
         condition: service_healthy
       cassandra:
         condition: service_healthy
-      ollama:
-        condition: service_started
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
       AIRFLOW__CORE__FERNET_KEY: ""
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      # Ollama connection
-      OLLAMA_HOST: http://ollama:11434
+      # Groq Cloud API for weak labeling
+      GROQ_API_KEY: ${GROQ_API_KEY}
       # Increase timeout to handle torch imports (30s)
       AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: 60
       # Increase heartbeat timeout for long-running model loading
@@ -316,25 +312,6 @@ services:
     command: scheduler
     networks:
       - reddit-network
-
-  # Ollama LLM for Active Learning validation
-  ollama:
-    image: ollama/ollama:latest
-    hostname: ollama
-    container_name: reddit-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-    networks:
-      - reddit-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
 
   # Streamlit Dashboard
   streamlit:
@@ -359,6 +336,41 @@ services:
       timeout: 10s
       retries: 3
 
+  # Training Service - Dedicated for PhoBERT retrain (separated from Airflow)
+  training-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.training
+    container_name: reddit-training-service
+    hostname: training-service
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./ml:/workspace/ml
+      - ./training_service:/workspace/training_service
+      - ./utils:/workspace/utils
+      - training-models:/workspace/ml/models  # Shared with Airflow
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TRANSFORMERS_CACHE=/workspace/ml/.cache
+      - HF_HOME=/workspace/ml/.cache
+    networks:
+      - reddit-network
+    deploy:
+      resources:
+        limits:
+          memory: 12G  # More RAM for PhoBERT training
+          cpus: '4.0'
+        reservations:
+          memory: 8G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: python /workspace/training_service/app.py
+
 volumes:
   zookeeper-data:
   zookeeper-logs:
@@ -368,7 +380,7 @@ volumes:
   grafana-data:
   airflow-postgres-data:
   airflow-data:
-  ollama-data:
+  training-models:  # Shared volume for trained models
 
 networks:
   reddit-network:

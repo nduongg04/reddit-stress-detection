@@ -3,9 +3,10 @@ reddit:
   # - "vietnamese": General Vietnamese keyword collection (stress + non-stress)
   # - "vozforums_stress": r/vozforums stress posts only (for clean training data)
   # - "subreddit": Traditional subreddit streaming
-  collection_mode: "subreddit"
+  collection_mode: "vozforums_stress"  # Task 2.1: Use vozforums stress collection
 
   # Target posts (mode-specific) - set to -1 for continuous streaming
+  target_posts: 10000  # Task 2.1: Collect 10,000 posts from vozforums
   # target_posts: -1 # Infinite continuous streaming
 
   # Not used in Vietnamese mode but required

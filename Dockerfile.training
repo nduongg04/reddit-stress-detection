@@ -1,0 +1,42 @@
+FROM python:3.11-slim
+
+WORKDIR /workspace
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    gcc \
+    g++ \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY training_service/requirements.txt /workspace/training_service/
+COPY ml/models/requirements.txt /workspace/ml/models/
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r /workspace/training_service/requirements.txt
+RUN pip install --no-cache-dir -r /workspace/ml/models/requirements.txt
+
+# Install additional ML packages
+RUN pip install --no-cache-dir \
+    torch==2.0.1 \
+    transformers==4.30.0 \
+    sentencepiece==0.1.99 \
+    scikit-learn==1.3.0 \
+    pandas==2.0.3 \
+    numpy==1.24.3 \
+    tqdm==4.65.0 \
+    flask==3.0.0
+
+# Create directories
+RUN mkdir -p /workspace/ml/models/training_logs \
+    && mkdir -p /workspace/ml/.cache
+
+ENV PYTHONPATH=/workspace
+ENV TRANSFORMERS_CACHE=/workspace/ml/.cache
+ENV HF_HOME=/workspace/ml/.cache
+
+EXPOSE 5000
+
+CMD ["python", "/workspace/training_service/app.py"]

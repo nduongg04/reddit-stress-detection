@@ -419,19 +419,26 @@ def validate_with_ollama(**context):
 
 def retrain_model(**context):
     """
-    Task 5: Retrain LIGHTWEIGHT BiLSTM with original + validated data
+    Task 5: Trigger PhoBERT retrain on dedicated Training Service
     
-    NOTE: Using BiLSTM (~2-5M params) instead of PhoBERT (135M params) to avoid OOM
-    This is for WORKFLOW DEMO only - production model remains vietnamese_absa_sentiment_phobert_v1
+    NOTE: Changed from local training to API-based training
+    - Airflow only orchestrates (no OOM issues)
+    - Training Service has dedicated resources for PhoBERT (12GB RAM)
+    - Production model: vietnamese_absa_sentiment_phobert_v1 (135M params)
 
-    Combines:
-    - Original training data (vozforums_absa_labeled.csv)
-    - Newly validated data from active learning
-
-    Trains new model version
+    Workflow:
+    1. Prepare combined dataset (original + validated)
+    2. Call Training Service API to start job
+    3. Poll for completion
+    4. Return model directory
     """
     import pandas as pd
-    from ml.models.train_absa_simple import train, CONFIG
+    import requests
+    import time
+
+    print("=" * 80)
+    print("TASK 5: TRIGGER PHOBERT RETRAIN VIA TRAINING SERVICE")
+    print("=" * 80)
 
     # Get validated data file
     validated_file = context['task_instance'].xcom_pull(
@@ -448,93 +455,169 @@ def retrain_model(**context):
         print("No new validated samples. Skipping retraining.")
         raise AirflowSkipException("No new data to retrain")
 
-    print(f"Retraining LIGHTWEIGHT BiLSTM model with {validated_count} new samples...")
-    print("NOTE: Using BiLSTM (~2-5M params) to avoid OOM, not PhoBERT (135M params)")
+    print(f"\n[Step 1] Preparing training data...")
+    print(f"  - Validated samples: {validated_count}")
 
     # Load original training data if exists
     original_data_path = '/opt/airflow/ml/dataset/labeled/vozforums_absa_labeled.csv'
     if os.path.exists(original_data_path):
         original_data = pd.read_csv(original_data_path)
-        print(f"Original training data: {len(original_data)} samples")
+        print(f"  - Original training data: {len(original_data)} samples")
     else:
-        print("No original training data found. Using only validated data.")
+        print("  - No original training data found")
         original_data = None
 
-    # Combine with validated data if available
+    # Combine datasets
     if validated_file and os.path.exists(validated_file):
         validated_data = pd.read_csv(validated_file)
-        print(f"Validated data: {len(validated_data)} samples")
-
-        # Combine datasets
+        
         if original_data is not None:
             combined_data = pd.concat([original_data, validated_data], ignore_index=True)
-            print(f"Combined dataset: {len(combined_data)} samples")
+            print(f"  - Combined dataset: {len(combined_data)} samples")
         else:
             combined_data = validated_data
-            print(f"Using only validated data: {len(combined_data)} samples")
+            print(f"  - Using only validated data: {len(combined_data)} samples")
         
-        # Check if we have enough data to train
+        # Check minimum samples
         total_samples = len(combined_data)
-        MIN_SAMPLES_FOR_TRAINING = 10  # Reduced from 100 for testing with memory-optimized config
+        MIN_SAMPLES_FOR_TRAINING = 10
         
         if total_samples < MIN_SAMPLES_FOR_TRAINING:
-            print(f"⚠ Warning: Only {total_samples} samples available (minimum: {MIN_SAMPLES_FOR_TRAINING})")
-            print(f"✓ Skipping actual model training - insufficient data for meaningful training")
-            print(f"✓ Validated data saved for future training when more samples are collected")
+            print(f"\n⚠ Warning: Only {total_samples} samples (minimum: {MIN_SAMPLES_FOR_TRAINING})")
+            print(f"✓ Skipping training - data accumulated for future run")
             
-            # Save for accumulation but skip training
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             combined_file = f'/opt/airflow/ml/dataset/labeled/combined_{timestamp}.csv'
             combined_data.to_csv(combined_file, index=False)
             
-            # Return metadata without training
             return {
                 'status': 'skipped_insufficient_data',
                 'total_samples': total_samples,
                 'minimum_required': MIN_SAMPLES_FOR_TRAINING,
                 'data_file': combined_file,
-                'message': f'Training skipped - need {MIN_SAMPLES_FOR_TRAINING - total_samples} more samples'
+                'message': f'Need {MIN_SAMPLES_FOR_TRAINING - total_samples} more samples'
             }
 
         # Save combined dataset
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        combined_file = f'/opt/airflow/ml/dataset/labeled/combined_{timestamp}.csv'
+        combined_file = f'/workspace/ml/dataset/labeled/combined_{timestamp}.csv'
         combined_data.to_csv(combined_file, index=False)
+        print(f"  ✓ Saved combined data: {combined_file}")
 
-        # Update config to use combined data
-        CONFIG['data_file'] = combined_file
-
-    # Create new model version directory in shared volume
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    new_model_dir = f'/opt/airflow/ml/models/vietnamese_absa_simple_{timestamp}'  # Use airflow path with write permission
-    CONFIG['output_dir'] = new_model_dir
-
-    print(f"Training new LIGHTWEIGHT model version: {new_model_dir}")
-
-    # Train model
-    train(CONFIG)
-
-    print(f"✓ Model training complete: {new_model_dir}")
-
-    # Save model metadata
-    metadata = {
-        'version': timestamp,
-        'trained_at': datetime.now().isoformat(),
-        'original_samples': len(original_data) if original_data is not None else 0,
-        'validated_samples': validated_count,
-        'total_samples': (len(original_data) if original_data is not None else 0) + validated_count,
-        'model_dir': new_model_dir,
-        'config': CONFIG
+    print(f"\n[Step 2] Triggering Training Service API...")
+    
+    # Training configuration
+    training_config = {
+        'model_type': 'phobert',
+        'data_file': combined_file,
+        'config': {
+            'model_name': 'vinai/phobert-base-v2',
+            'checkpoint_dir': '/workspace/ml/models/vietnamese_absa_sentiment_phobert_v1',  # Base model
+            'num_epochs': 5,
+            'batch_size': 8,
+            'gradient_accumulation_steps': 4,
+            'learning_rate': 2e-5,
+            'mixed_precision': True,
+            'output_dir': f'/workspace/ml/models/vietnamese_absa_phobert_retrained'
+        }
     }
+    
+    print(f"  - Training Service: http://training-service:5000")
+    print(f"  - Model: PhoBERT (135M params)")
+    print(f"  - Epochs: {training_config['config']['num_epochs']}")
+    print(f"  - Batch size: {training_config['config']['batch_size']} × {training_config['config']['gradient_accumulation_steps']} (effective)")
+    
+    try:
+        # Start training job
+        response = requests.post(
+            'http://training-service:5000/api/train',
+            json=training_config,
+            timeout=10
+        )
+        
+        if response.status_code != 202:
+            raise Exception(f"Training API returned {response.status_code}: {response.text}")
+        
+        job_data = response.json()
+        job_id = job_data['job_id']
+        
+        print(f"  ✓ Training job started: {job_id}")
+        print(f"  - State: {job_data['state']}")
+        
+    except requests.exceptions.ConnectionError:
+        print(f"\n✗ ERROR: Cannot connect to Training Service")
+        print(f"  Make sure training-service container is running:")
+        print(f"  $ docker-compose up -d training-service")
+        raise
+    except Exception as e:
+        print(f"\n✗ ERROR starting training: {str(e)}")
+        raise
 
-    with open(f'{new_model_dir}/metadata.json', 'w') as f:
-        json.dump(metadata, f, indent=2)
-
-    # Save to XCom
-    context['task_instance'].xcom_push(key='model_version', value=timestamp)
-    context['task_instance'].xcom_push(key='model_dir', value=new_model_dir)
-
-    return new_model_dir
+    # Poll for completion
+    print(f"\n[Step 3] Monitoring training progress...")
+    max_wait_time = 3600  # 1 hour max
+    poll_interval = 30    # Check every 30 seconds
+    elapsed = 0
+    
+    while elapsed < max_wait_time:
+        try:
+            status_response = requests.get(
+                f'http://training-service:5000/api/jobs/{job_id}',
+                timeout=10
+            )
+            
+            if status_response.status_code != 200:
+                print(f"  ⚠ Status check failed: {status_response.status_code}")
+                time.sleep(poll_interval)
+                elapsed += poll_interval
+                continue
+            
+            job_status = status_response.json()
+            state = job_status['state']
+            
+            print(f"  [{elapsed}s] Job state: {state}")
+            
+            if state == 'completed':
+                model_dir = job_status['model_dir']
+                print(f"\n✓ Training completed successfully!")
+                print(f"  - Model directory: {model_dir}")
+                print(f"  - Total time: {elapsed} seconds")
+                
+                # Extract version from model_dir
+                version = model_dir.split('_')[-1] if '_' in model_dir else timestamp
+                
+                # Save to XCom
+                context['task_instance'].xcom_push(key='model_version', value=version)
+                context['task_instance'].xcom_push(key='model_dir', value=model_dir)
+                
+                print("\n" + "=" * 80)
+                print(f"TASK 5: RETRAIN COMPLETED - {model_dir}")
+                print("=" * 80)
+                
+                return model_dir
+                
+            elif state == 'failed':
+                error = job_status.get('error', 'Unknown error')
+                print(f"\n✗ Training failed: {error}")
+                raise Exception(f"Training job {job_id} failed: {error}")
+            
+            elif state in ['queued', 'running']:
+                # Still in progress
+                time.sleep(poll_interval)
+                elapsed += poll_interval
+            else:
+                print(f"  ⚠ Unknown state: {state}")
+                time.sleep(poll_interval)
+                elapsed += poll_interval
+                
+        except requests.exceptions.RequestException as e:
+            print(f"  ⚠ Status check error: {str(e)}")
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+    
+    # Timeout
+    print(f"\n✗ Training timeout after {max_wait_time} seconds")
+    raise Exception(f"Training job {job_id} timed out")
 
 
 def update_model_registry(**context):

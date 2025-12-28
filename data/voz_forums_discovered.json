@@ -1,0 +1,272 @@
+{
+  "all_forums": [
+    {
+      "title": "Post thread…",
+      "url": "/f/-/create-thread",
+      "forum_id": "create-thread"
+    },
+    {
+      "title": "Thông báo",
+      "url": "/f/thong-bao.2/",
+      "forum_id": "thong-bao.2"
+    },
+    {
+      "title": "Góp ý",
+      "url": "/f/gop-y.3/",
+      "forum_id": "gop-y.3"
+    },
+    {
+      "title": "Tư vấn cấu hình",
+      "url": "/f/tu-van-cau-hinh.70/",
+      "forum_id": "tu-van-cau-hinh.70"
+    },
+    {
+      "title": "Overclocking & Cooling & Modding",
+      "url": "/f/overclocking-cooling-modding.6/",
+      "forum_id": "overclocking-cooling-modding.6"
+    },
+    {
+      "title": "AMD",
+      "url": "/f/amd.25/",
+      "forum_id": "amd.25"
+    },
+    {
+      "title": "Intel",
+      "url": "/f/intel.24/",
+      "forum_id": "intel.24"
+    },
+    {
+      "title": "GPU & Màn hình",
+      "url": "/f/gpu-man-hinh.8/",
+      "forum_id": "gpu-man-hinh.8"
+    },
+    {
+      "title": "Phần cứng chung",
+      "url": "/f/phan-cung-chung.9/",
+      "forum_id": "phan-cung-chung.9"
+    },
+    {
+      "title": "Thiết bị ngoại vi & Phụ kiện & Mạng",
+      "url": "/f/thiet-bi-ngoai-vi-phu-kien-mang.30/",
+      "forum_id": "thiet-bi-ngoai-vi-phu-kien-mang.30"
+    },
+    {
+      "title": "Server / NAS / Render Farm",
+      "url": "/f/server-nas-render-farm.83/",
+      "forum_id": "server-nas-render-farm.83"
+    },
+    {
+      "title": "Small Form Factor PC",
+      "url": "/f/small-form-factor-pc.61/",
+      "forum_id": "small-form-factor-pc.61"
+    },
+    {
+      "title": "Hackintosh",
+      "url": "/f/hackintosh.62/",
+      "forum_id": "hackintosh.62"
+    },
+    {
+      "title": "Máy tính xách tay",
+      "url": "/f/may-tinh-xach-tay.47/",
+      "forum_id": "may-tinh-xach-tay.47"
+    },
+    {
+      "title": "Phần mềm",
+      "url": "/f/phan-mem.13/",
+      "forum_id": "phan-mem.13"
+    },
+    {
+      "title": "App di động",
+      "url": "/f/app-di-%C4%91ong.21/",
+      "forum_id": "app-di-%C4%91ong.21"
+    },
+    {
+      "title": "Liên Quân Mobile",
+      "url": "/f/lien-quan-mobile.88/",
+      "forum_id": "lien-quan-mobile.88"
+    },
+    {
+      "title": "PC Gaming",
+      "url": "/f/pc-gaming.11/",
+      "forum_id": "pc-gaming.11"
+    },
+    {
+      "title": "Liên Minh Huyền Thoại",
+      "url": "/f/lien-minh-huyen-thoai.87/",
+      "forum_id": "lien-minh-huyen-thoai.87"
+    },
+    {
+      "title": "Console Gaming",
+      "url": "/f/console-gaming.22/",
+      "forum_id": "console-gaming.22"
+    },
+    {
+      "title": "Android",
+      "url": "/f/android.32/",
+      "forum_id": "android.32"
+    },
+    {
+      "title": "Apple",
+      "url": "/f/apple.36/",
+      "forum_id": "apple.36"
+    },
+    {
+      "title": "Multimedia",
+      "url": "/f/multimedia.31/",
+      "forum_id": "multimedia.31"
+    },
+    {
+      "title": "Đồ điện tử & Thiết bị gia dụng",
+      "url": "/f/%C4%90o-%C4%91ien-tu-thiet-bi-gia-dung.10/",
+      "forum_id": "%C4%90o-%C4%91ien-tu-thiet-bi-gia-dung.10"
+    },
+    {
+      "title": "Chụp ảnh & Quay phim",
+      "url": "/f/chup-anh-quay-phim.75/",
+      "forum_id": "chup-anh-quay-phim.75"
+    },
+    {
+      "title": "Góc chiến lược",
+      "url": "/f/goc-chien-luoc.101/",
+      "forum_id": "goc-chien-luoc.101"
+    },
+    {
+      "title": "Tuyển dụng - Tìm việc",
+      "url": "/f/tuyen-dung-tim-viec.95/",
+      "forum_id": "tuyen-dung-tim-viec.95"
+    },
+    {
+      "title": "Ngoại ngữ",
+      "url": "/f/ngoai-ngu.90/",
+      "forum_id": "ngoai-ngu.90"
+    },
+    {
+      "title": "Lập trình / CNTT",
+      "url": "/f/lap-trinh-cntt.91/",
+      "forum_id": "lap-trinh-cntt.91"
+    },
+    {
+      "title": "Kinh tế / Luật",
+      "url": "/f/kinh-te-luat.92/",
+      "forum_id": "kinh-te-luat.92"
+    },
+    {
+      "title": "Make Money Online",
+      "url": "/f/make-money-online.93/",
+      "forum_id": "make-money-online.93"
+    },
+    {
+      "title": "Tiền điện tử",
+      "url": "/f/tien-%C4%91ien-tu.94/",
+      "forum_id": "tien-%C4%91ien-tu.94"
+    },
+    {
+      "title": "Chuyện trò linh tinh™",
+      "url": "/f/chuyen-tro-linh-tinh%E2%84%A2.17/",
+      "forum_id": "chuyen-tro-linh-tinh%E2%84%A2.17"
+    },
+    {
+      "title": "from f17 with love",
+      "url": "/f/from-f17-with-love.69/",
+      "forum_id": "from-f17-with-love.69"
+    },
+    {
+      "title": "Truyện VOZ",
+      "url": "/f/truyen-voz.96/",
+      "forum_id": "truyen-voz.96"
+    },
+    {
+      "title": "Điểm báo",
+      "url": "/f/%C4%90iem-bao.33/",
+      "forum_id": "%C4%90iem-bao.33"
+    },
+    {
+      "title": "4 bánh",
+      "url": "/f/4-banh.38/",
+      "forum_id": "4-banh.38"
+    },
+    {
+      "title": "2 bánh",
+      "url": "/f/2-banh.39/",
+      "forum_id": "2-banh.39"
+    },
+    {
+      "title": "Thể dục thể thao",
+      "url": "/f/the-duc-the-thao.63/",
+      "forum_id": "the-duc-the-thao.63"
+    },
+    {
+      "title": "Ẩm thực & Du lịch",
+      "url": "/f/am-thuc-du-lich.64/",
+      "forum_id": "am-thuc-du-lich.64"
+    },
+    {
+      "title": "Phim / Nhạc / Sách",
+      "url": "/f/phim-nhac-sach.65/",
+      "forum_id": "phim-nhac-sach.65"
+    },
+    {
+      "title": "Thời trang & Làm đẹp",
+      "url": "/f/thoi-trang-lam-%C4%91ep.66/",
+      "forum_id": "thoi-trang-lam-%C4%91ep.66"
+    },
+    {
+      "title": "Các thú chơi khác",
+      "url": "/f/cac-thu-choi-khac.67/",
+      "forum_id": "cac-thu-choi-khac.67"
+    },
+    {
+      "title": "Máy tính để bàn",
+      "url": "/f/may-tinh-%C4%91e-ban.68/",
+      "forum_id": "may-tinh-%C4%91e-ban.68"
+    },
+    {
+      "title": "Máy tính xách tay",
+      "url": "/f/may-tinh-xach-tay.72/",
+      "forum_id": "may-tinh-xach-tay.72"
+    },
+    {
+      "title": "Điện thoại di động",
+      "url": "/f/%C4%90ien-thoai-di-%C4%91ong.76/",
+      "forum_id": "%C4%90ien-thoai-di-%C4%91ong.76"
+    },
+    {
+      "title": "Xe các loại",
+      "url": "/f/xe-cac-loai.77/",
+      "forum_id": "xe-cac-loai.77"
+    },
+    {
+      "title": "Thời trang & Làm đẹp",
+      "url": "/f/thoi-trang-lam-%C4%91ep.78/",
+      "forum_id": "thoi-trang-lam-%C4%91ep.78"
+    },
+    {
+      "title": "Bất động sản",
+      "url": "/f/bat-%C4%91ong-san.79/",
+      "forum_id": "bat-%C4%91ong-san.79"
+    },
+    {
+      "title": "Ăn uống & Du lịch",
+      "url": "/f/an-uong-du-lich.81/",
+      "forum_id": "an-uong-du-lich.81"
+    },
+    {
+      "title": "SIM số & Đồ phong thuỷ",
+      "url": "/f/sim-so-%C4%90o-phong-thuy.82/",
+      "forum_id": "sim-so-%C4%90o-phong-thuy.82"
+    },
+    {
+      "title": "Sản phẩm & Dịch vụ khác",
+      "url": "/f/san-pham-dich-vu-khac.80/",
+      "forum_id": "san-pham-dich-vu-khac.80"
+    },
+    {
+      "title": "RSS",
+      "url": "/f/-/index.rss",
+      "forum_id": "index.rss"
+    }
+  ],
+  "stress_related": [],
+  "total_forums": 53,
+  "stress_forums_count": 0
+}
