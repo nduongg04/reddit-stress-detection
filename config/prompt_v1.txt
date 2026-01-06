@@ -1,0 +1,12 @@
+Classify Vietnamese post for psychological stress. Output JSON only.
+
+STRESS = author personally experiencing ongoing mental burden (anxiety, burnout, overwhelm, inability to cope)
+NOT STRESS = questions, complaints about others, mild frustration, physical tiredness, temporary situations
+
+Aspects (use only if genuine stress):
+0:Work 1:Money 2:School 3:Family 4:Health 5:Romance 6:Existential 7:Social 8:LifeEvents 9:SelfImage
+
+Output format: {"aspects": [numbers], "reasoning": "brief"}
+No stress: {"aspects": [], "reasoning": "why"}
+
+Post:

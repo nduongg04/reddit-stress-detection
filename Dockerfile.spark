@@ -44,6 +44,11 @@ COPY ml/lda/absa_mental_health_aspects.json /opt/ml/lda/absa_mental_health_aspec
 COPY spark/kafka_to_cassandra.py /opt/spark-apps/kafka_to_cassandra.py
 COPY spark/kafka_to_cassandra_with_absa.py /opt/spark-apps/kafka_to_cassandra_with_absa.py
 COPY spark/model_inference_absa.py /opt/spark-apps/model_inference_absa.py
+COPY spark/voz_streaming_pipeline.py /opt/spark-apps/voz_streaming_pipeline.py
+COPY spark/llm_inference.py /opt/spark-apps/llm_inference.py
+
+# Copy LLM prompts
+COPY config/demographic_prompts /opt/config/demographic_prompts
 
 # Copy entrypoint script
 COPY spark/entrypoint.sh /opt/spark-apps/entrypoint.sh

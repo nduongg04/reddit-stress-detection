@@ -128,3 +128,6 @@ htmlcov/
 # Documentation builds
 docs/_build/
 site/
+
+*.pt
+*.jsonl

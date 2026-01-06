@@ -1,0 +1,356 @@
+{
+  "version": "1.0",
+  "created_at": "2024-12-30",
+  "aspects": [
+    {
+      "id": 0,
+      "name_en": "Occupational",
+      "name_vi": "Công việc",
+      "definition": "Stress related to work environment, job demands, workplace relationships, career concerns, and professional challenges.",
+      "academic_sources": [
+        "Karasek, R. A. (1979). Job demands, job decision latitude, and mental strain.",
+        "Siegrist, J. (1996). Adverse health effects of high-effort/low-reward conditions."
+      ],
+      "inclusion_rules": [
+        "Post mentions work overload, tight deadlines, or excessive job demands",
+        "Post describes conflict with boss, colleagues, or workplace harassment",
+        "Post expresses fear of job loss, unemployment, or career stagnation",
+        "Post discusses work-life imbalance or burnout symptoms"
+      ],
+      "exclusion_rules": [
+        "Post only mentions job title without expressing stress",
+        "Post describes positive work achievements or promotions"
+      ],
+      "keywords_vi": [
+        "công việc", "sếp", "đồng nghiệp", "deadline", "họp", "dự án",
+        "lương", "thăng tiến", "sa thải", "nghỉ việc", "áp lực công việc",
+        "burnout", "làm thêm giờ", "OT"
+      ],
+      "positive_examples": [
+        "Sếp mình cứ giao deadline sát nút, làm không kịp thở luôn. Stress quá trời.",
+        "Đồng nghiệp chơi xấu sau lưng, mình không biết tin ai ở công ty nữa.",
+        "Công ty đang cắt giảm nhân sự, lo quá không biết có bị cho nghỉ không."
+      ],
+      "negative_examples": [
+        "Hôm nay được sếp khen làm tốt, vui ghê.",
+        "Mình làm IT ở công ty ABC được 2 năm rồi.",
+        "Cuối tuần rồi, nghỉ ngơi thôi không nghĩ đến việc."
+      ]
+    },
+    {
+      "id": 1,
+      "name_en": "Financial",
+      "name_vi": "Tài chính",
+      "definition": "Stress arising from money problems, debt, insufficient income, financial insecurity, or economic hardship.",
+      "academic_sources": [
+        "Prawitz, A. D. et al. (2006). InCharge Financial Distress/Financial Well-Being Scale.",
+        "Sweet, E. et al. (2013). The high price of debt: Household financial debt and its impact on mental and physical health."
+      ],
+      "inclusion_rules": [
+        "Post mentions inability to pay bills, rent, or basic necessities",
+        "Post describes significant debt burden or loan pressure",
+        "Post expresses worry about financial future or retirement",
+        "Post discusses income loss or insufficient earnings"
+      ],
+      "exclusion_rules": [
+        "Post mentions money in neutral context (prices, shopping)",
+        "Post discusses financial success or savings goals without stress"
+      ],
+      "keywords_vi": [
+        "tiền", "nợ", "vay", "trả góp", "lương", "thu nhập", "chi tiêu",
+        "thiếu tiền", "phá sản", "tín dụng", "ngân hàng", "tiết kiệm",
+        "đầu tư thua lỗ", "hết tiền"
+      ],
+      "positive_examples": [
+        "Nợ ngân hàng chồng chất, không biết bao giờ mới trả hết.",
+        "Lương không đủ chi tiêu, cuối tháng nào cũng vay mượn.",
+        "Đầu tư crypto thua lỗ nặng, giờ không biết xoay đâu ra tiền."
+      ],
+      "negative_examples": [
+        "Mới mua được điện thoại mới, giá 15 triệu.",
+        "Hôm nay nhận lương rồi, cuối tuần đi ăn uống.",
+        "Đang tìm hiểu cách tiết kiệm hiệu quả."
+      ]
+    },
+    {
+      "id": 2,
+      "name_en": "Academic",
+      "name_vi": "Học tập",
+      "definition": "Stress from educational demands including exams, grades, coursework, thesis pressure, and academic performance expectations.",
+      "academic_sources": [
+        "Lin, S. H., & Chen, H. S. (2009). A study of academic stress among undergraduate students.",
+        "Misra, R., & McKean, M. (2000). College students' academic stress and its relation to their anxiety."
+      ],
+      "inclusion_rules": [
+        "Post mentions exam anxiety or fear of failing",
+        "Post describes pressure from grades, GPA, or academic performance",
+        "Post expresses overwhelm from coursework, thesis, or assignments",
+        "Post discusses parental pressure regarding education"
+      ],
+      "exclusion_rules": [
+        "Post mentions school/university without expressing academic stress",
+        "Post describes academic achievements or success"
+      ],
+      "keywords_vi": [
+        "thi", "điểm", "trượt", "đỗ", "luận văn", "bài tập", "học",
+        "đại học", "cao đẳng", "sinh viên", "GPA", "học bổng",
+        "thầy cô", "lớp học", "ôn thi"
+      ],
+      "positive_examples": [
+        "Mai thi rồi mà chưa học gì, lo lắm không biết có qua không.",
+        "Điểm kỳ này thấp quá, ba mẹ biết chắc la chết.",
+        "Luận văn sắp deadline mà chưa viết được gì, stress vãi."
+      ],
+      "negative_examples": [
+        "Hôm nay học xong môn cuối cùng của kỳ này.",
+        "Mình đang học năm 3 đại học Bách Khoa.",
+        "Vừa nhận học bổng 100%, vui quá."
+      ]
+    },
+    {
+      "id": 3,
+      "name_en": "Familial",
+      "name_vi": "Gia đình",
+      "definition": "Stress stemming from family relationships, parental expectations, sibling conflicts, caregiving responsibilities, or family dysfunction.",
+      "academic_sources": [
+        "Conger, R. D. et al. (1990). Linking economic hardship to family conflict.",
+        "Pearlin, L. I. (1989). The sociological study of stress."
+      ],
+      "inclusion_rules": [
+        "Post describes conflict with parents, spouse, or family members",
+        "Post mentions pressure from family expectations or traditions",
+        "Post expresses burden of caring for sick or elderly family members",
+        "Post discusses family dysfunction or toxic relationships"
+      ],
+      "exclusion_rules": [
+        "Post mentions family in neutral or positive context",
+        "Post describes happy family events (weddings, birthdays)"
+      ],
+      "keywords_vi": [
+        "cha mẹ", "bố mẹ", "gia đình", "vợ", "chồng", "con cái",
+        "anh chị em", "họ hàng", "bà", "ông", "mâu thuẫn", "cãi nhau",
+        "ly hôn", "gia đình tan vỡ", "nuôi con"
+      ],
+      "positive_examples": [
+        "Ba mẹ cứ so sánh mình với con nhà người ta, mệt lắm.",
+        "Vợ chồng cãi nhau suốt, không biết sống sao nữa.",
+        "Phải chăm mẹ bị bệnh mà còn đi làm, kiệt sức rồi."
+      ],
+      "negative_examples": [
+        "Cuối tuần về thăm gia đình, vui ghê.",
+        "Gia đình mình có 4 người: bố mẹ và em gái.",
+        "Sinh nhật mẹ, cả nhà tổ chức tiệc."
+      ]
+    },
+    {
+      "id": 4,
+      "name_en": "Health",
+      "name_vi": "Sức khỏe",
+      "definition": "Stress related to physical or mental health conditions, chronic illness, sleep problems, pain, fatigue, or health anxiety.",
+      "academic_sources": [
+        "Cohen, S. et al. (1983). A global measure of perceived stress.",
+        "Lazarus, R. S., & Folkman, S. (1984). Stress, appraisal, and coping."
+      ],
+      "inclusion_rules": [
+        "Post mentions physical illness, chronic pain, or health conditions",
+        "Post describes sleep problems, insomnia, or fatigue",
+        "Post expresses anxiety about health diagnosis or symptoms",
+        "Post discusses impact of health issues on daily life"
+      ],
+      "exclusion_rules": [
+        "Post mentions health topics without personal stress (news, tips)",
+        "Post describes recovery or positive health outcomes"
+      ],
+      "keywords_vi": [
+        "bệnh", "đau", "mệt", "ngủ", "mất ngủ", "khám", "bệnh viện",
+        "thuốc", "ung thư", "trầm cảm", "lo âu", "sức khỏe",
+        "kiệt sức", "stress", "đau đầu"
+      ],
+      "positive_examples": [
+        "Mất ngủ mấy đêm liền, đầu đau như búa bổ.",
+        "Bác sĩ nói cần xét nghiệm thêm, lo quá không biết có sao không.",
+        "Trầm cảm mấy tháng nay, không muốn làm gì cả."
+      ],
+      "negative_examples": [
+        "Hôm nay đi khám định kỳ, mọi thứ bình thường.",
+        "Tập gym được 1 tháng, thấy khỏe hơn nhiều.",
+        "Chia sẻ mẹo ngủ ngon cho mọi người."
+      ]
+    },
+    {
+      "id": 5,
+      "name_en": "Romantic",
+      "name_vi": "Tình cảm",
+      "definition": "Stress from romantic relationships including breakups, loneliness, unrequited love, relationship conflicts, or dating anxiety.",
+      "academic_sources": [
+        "Hendrick, S. S. (1988). A generic measure of relationship satisfaction.",
+        "Stack, S., & Eshleman, J. R. (1998). Marital status and happiness."
+      ],
+      "inclusion_rules": [
+        "Post describes heartbreak, breakup, or relationship ending",
+        "Post expresses loneliness or desire for romantic connection",
+        "Post mentions conflict, jealousy, or trust issues with partner",
+        "Post discusses unrequited love or rejection"
+      ],
+      "exclusion_rules": [
+        "Post mentions relationships in neutral context (advice, questions)",
+        "Post describes happy relationship moments"
+      ],
+      "keywords_vi": [
+        "người yêu", "bạn trai", "bạn gái", "chia tay", "yêu", "thất tình",
+        "cô đơn", "lừa dối", "ngoại tình", "ghen", "crush",
+        "FA", "độc thân", "tình yêu"
+      ],
+      "positive_examples": [
+        "Chia tay rồi mà vẫn không quên được người ta.",
+        "FA mấy năm rồi, thấy bạn bè có đôi mà tủi thân.",
+        "Phát hiện người yêu lừa dối, không tin được."
+      ],
+      "negative_examples": [
+        "Hôm nay kỷ niệm 2 năm yêu nhau, hạnh phúc ghê.",
+        "Mọi người cho mình xin tips hẹn hò với.",
+        "Đang tìm hiểu một bạn, mọi thứ ổn."
+      ]
+    },
+    {
+      "id": 6,
+      "name_en": "Existential",
+      "name_vi": "Hiện sinh",
+      "definition": "Stress from questioning life's meaning, purpose, identity, self-worth, or experiencing feelings of emptiness and purposelessness.",
+      "academic_sources": [
+        "Crumbaugh, J. C. (1964). An experimental approach in existential psychology.",
+        "Frankl, V. E. (1959). Man's search for meaning."
+      ],
+      "inclusion_rules": [
+        "Post expresses feeling life has no meaning or purpose",
+        "Post describes identity crisis or not knowing who they are",
+        "Post mentions feeling empty, lost, or purposeless",
+        "Post questions the point of living or existence"
+      ],
+      "exclusion_rules": [
+        "Post discusses philosophical topics academically",
+        "Post describes positive self-discovery or growth"
+      ],
+      "keywords_vi": [
+        "ý nghĩa", "mục đích", "vô nghĩa", "trống rỗng", "lạc lõng",
+        "bản thân", "tồn tại", "sống để làm gì", "không biết mình là ai",
+        "hoang mang", "bế tắc", "tương lai mờ mịt", "tuyệt vọng"
+      ],
+      "positive_examples": [
+        "Không biết mình sống để làm gì nữa, mọi thứ vô nghĩa.",
+        "Cảm thấy trống rỗng, không có mục tiêu gì trong cuộc sống.",
+        "Hoang mang quá, không biết tương lai sẽ đi về đâu."
+      ],
+      "negative_examples": [
+        "Mình đang đọc sách về triết học hiện sinh.",
+        "Tìm được đam mê mới, cảm thấy cuộc sống có ý nghĩa hơn.",
+        "Ai có sách hay về tìm kiếm ý nghĩa cuộc sống không?"
+      ]
+    },
+    {
+      "id": 7,
+      "name_en": "Social",
+      "name_vi": "Xã hội",
+      "definition": "Stress from social relationships, peer pressure, social isolation, friendship conflicts, or difficulty in social interactions.",
+      "academic_sources": [
+        "Thoits, P. A. (1995). Stress, coping, and social support processes.",
+        "Cacioppo, J. T., & Hawkley, L. C. (2009). Perceived social isolation and cognition."
+      ],
+      "inclusion_rules": [
+        "Post describes conflict with friends or peer group",
+        "Post expresses social isolation or difficulty making friends",
+        "Post mentions being excluded, bullied, or judged by peers",
+        "Post discusses social anxiety or fear of social situations"
+      ],
+      "exclusion_rules": [
+        "Post mentions social activities without expressing stress",
+        "Post describes positive friendships or social connections"
+      ],
+      "keywords_vi": [
+        "bạn bè", "cô lập", "tẩy chay", "bắt nạt", "xã hội",
+        "giao tiếp", "ngại", "introvert", "không ai hiểu",
+        "một mình", "cô độc", "hội nhóm", "peer pressure"
+      ],
+      "positive_examples": [
+        "Bạn bè tẩy chay mình, không ai muốn chơi cùng.",
+        "Ngại giao tiếp quá, mỗi lần nói chuyện với người lạ là run.",
+        "Cảm giác không ai hiểu mình, một mình giữa đám đông."
+      ],
+      "negative_examples": [
+        "Cuối tuần đi cafe với hội bạn thân.",
+        "Mình quen được nhiều bạn mới ở CLB.",
+        "Tổ chức tiệc sinh nhật với bạn bè."
+      ]
+    },
+    {
+      "id": 8,
+      "name_en": "Life Events",
+      "name_vi": "Sự kiện",
+      "definition": "Stress from major life changes or traumatic events including loss, death, relocation, divorce, accidents, or significant transitions.",
+      "academic_sources": [
+        "Holmes, T. H., & Rahe, R. H. (1967). The Social Readjustment Rating Scale.",
+        "Wheaton, B. (1999). Social stress."
+      ],
+      "inclusion_rules": [
+        "Post describes death of loved one or grief",
+        "Post mentions divorce, separation, or family breakdown",
+        "Post discusses major relocation or life transition",
+        "Post expresses trauma from accident, disaster, or violence"
+      ],
+      "exclusion_rules": [
+        "Post mentions life events without expressing distress",
+        "Post describes planned positive changes (new job, new home)"
+      ],
+      "keywords_vi": [
+        "mất", "chết", "tang", "ly hôn", "chia ly", "tai nạn",
+        "chuyển nhà", "thay đổi", "mất mát", "đau buồn",
+        "biến cố", "sốc", "trauma", "bất ngờ"
+      ],
+      "positive_examples": [
+        "Bà mất rồi, không biết sống sao khi không còn bà.",
+        "Ba mẹ ly hôn, gia đình tan vỡ, đau lắm.",
+        "Tai nạn xong giờ vẫn ám ảnh, đêm nào cũng mơ lại."
+      ],
+      "negative_examples": [
+        "Vừa chuyển nhà mới, không gian đẹp lắm.",
+        "Cháu mới sinh, cả nhà vui.",
+        "Năm nay có nhiều thay đổi tích cực."
+      ]
+    },
+    {
+      "id": 9,
+      "name_en": "Self Image",
+      "name_vi": "Hình ảnh bản thân",
+      "definition": "Stress related to self-perception, body image, appearance concerns, low self-esteem, or negative self-evaluation.",
+      "academic_sources": [
+        "Rosenberg, M. (1965). Society and the adolescent self-image.",
+        "Cash, T. F. (2004). Body image: Past, present, and future."
+      ],
+      "inclusion_rules": [
+        "Post expresses dissatisfaction with physical appearance",
+        "Post describes low self-esteem or self-worth",
+        "Post mentions feeling inferior or comparing self to others",
+        "Post discusses body image issues or weight concerns"
+      ],
+      "exclusion_rules": [
+        "Post mentions appearance in neutral context (fashion, style)",
+        "Post describes positive self-image or self-acceptance"
+      ],
+      "keywords_vi": [
+        "xấu", "béo", "gầy", "ngoại hình", "tự ti", "mặc cảm",
+        "không đẹp", "so sánh", "thấp kém", "thua kém",
+        "body shaming", "da", "tóc", "chiều cao"
+      ],
+      "positive_examples": [
+        "Nhìn mình trong gương thấy xấu quá, tự ti lắm.",
+        "Ai cũng xinh đẹp, còn mình thì...",
+        "Béo quá, có ai chê mình suốt, mặc cảm ghê."
+      ],
+      "negative_examples": [
+        "Hôm nay mặc đẹp ghê, thích lắm.",
+        "Mình đang tìm hiểu skincare routine.",
+        "Tập gym 3 tháng, thấy body đẹp hơn."
+      ]
+    }
+  ]
+}

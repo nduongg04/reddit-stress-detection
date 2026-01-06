@@ -1,391 +1,666 @@
 #!/usr/bin/env python3
 """
-Streamlit Dashboard for Vietnamese ABSA Mental Health Detection
-Real-time visualization of aspect-based sentiment analysis results
+Streamlit Dashboard for Vietnamese Stress Detection
+Real-time visualization of VOZ posts with stress aspects and demographics
 """
 import streamlit as st
 import pandas as pd
 from cassandra.cluster import Cluster
-from cassandra.auth import PlainTextAuthProvider
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
-import json
-from collections import Counter, defaultdict
-import time
+from collections import defaultdict
+import numpy as np
+from streamlit_autorefresh import st_autorefresh
 
 # Page configuration
 st.set_page_config(
-    page_title="Vietnamese Mental Health ABSA Dashboard",
+    page_title="Vietnamese Stress Detection Dashboard",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Cassandra connection
+# Aspect definitions
+ASPECTS = [
+    {"id": 0, "name_en": "Occupational", "name_vi": "Công việc", "color": "#3498db"},
+    {"id": 1, "name_en": "Financial", "name_vi": "Tài chính", "color": "#2ecc71"},
+    {"id": 2, "name_en": "Academic", "name_vi": "Học tập", "color": "#e74c3c"},
+    {"id": 3, "name_en": "Familial", "name_vi": "Gia đình", "color": "#9b59b6"},
+    {"id": 4, "name_en": "Health", "name_vi": "Sức khỏe", "color": "#e67e22"},
+    {"id": 5, "name_en": "Romantic", "name_vi": "Tình cảm", "color": "#1abc9c"},
+    {"id": 6, "name_en": "Existential", "name_vi": "Hiện sinh", "color": "#34495e"},
+    {"id": 7, "name_en": "Social", "name_vi": "Xã hội", "color": "#f39c12"},
+    {"id": 8, "name_en": "Life Events", "name_vi": "Sự kiện", "color": "#d35400"},
+    {"id": 9, "name_en": "Self Image", "name_vi": "Hình ảnh bản thân", "color": "#c0392b"},
+]
+
+ASPECT_COLORS = {a["id"]: a["color"] for a in ASPECTS}
+ASPECT_NAMES = {a["id"]: f"{a['name_vi']} ({a['name_en']})" for a in ASPECTS}
+
+# Demographics labels
+GENDER_LABELS = {"nam": "Nam 👨", "nữ": "Nữ 👩", "unknown": "Không rõ ❓"}
+AGE_LABELS = {
+    "teen": "13-17 tuổi",
+    "young_adult": "18-25 tuổi",
+    "adult": "26-40 tuổi",
+    "middle_aged": "41-60 tuổi",
+    "senior": "60+ tuổi",
+    "unknown": "Không rõ"
+}
+OCCUPATION_LABELS = {
+    "student": "Học sinh/Sinh viên 📚",
+    "office_worker": "Nhân viên văn phòng 💼",
+    "it_engineer": "IT/Kỹ sư 💻",
+    "healthcare": "Y tế 🏥",
+    "teacher": "Giáo viên 👨‍🏫",
+    "blue_collar": "Công nhân 🔧",
+    "freelance": "Tự do 🎨",
+    "unemployed": "Thất nghiệp 😔",
+    "unknown": "Không rõ ❓"
+}
+RELATIONSHIP_LABELS = {
+    "single": "Độc thân 💔",
+    "dating": "Đang hẹn hò 💕",
+    "married": "Đã kết hôn 💍",
+    "divorced": "Ly hôn 💔",
+    "unknown": "Không rõ ❓"
+}
+
+
 @st.cache_resource
 def get_cassandra_session():
     """Connect to Cassandra cluster"""
     try:
-        cluster = Cluster(['cassandra'], port=9042)
-        session = cluster.connect('reddit_rt')
-        return session
+        # Try Docker network first, then localhost
+        hosts = ["cassandra", "localhost"]
+        for host in hosts:
+            try:
+                cluster = Cluster([host], port=9042)
+                session = cluster.connect("reddit_rt")
+                return session
+            except Exception:
+                continue
+        st.error("Cannot connect to Cassandra")
+        return None
     except Exception as e:
-        st.error(f"Failed to connect to Cassandra: {e}")
+        st.error(f"Cassandra connection error: {e}")
         return None
 
-# Load ABSA aspects definition
-@st.cache_data
-def load_aspects():
-    """Load aspect definitions"""
-    try:
-        with open('/opt/ml/lda/absa_mental_health_aspects.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data['aspects']
-    except:
-        # Fallback aspect names
-        return [
-            {'aspect_name': 'công_việc', 'keywords': ['work', 'job']},
-            {'aspect_name': 'học_tập', 'keywords': ['study', 'school']},
-            {'aspect_name': 'tình_yêu', 'keywords': ['love', 'relationship']},
-            {'aspect_name': 'gia_đình', 'keywords': ['family']},
-            {'aspect_name': 'sức_khỏe', 'keywords': ['health']},
-            {'aspect_name': 'tài_chính', 'keywords': ['money', 'finance']},
-            {'aspect_name': 'xã_hội', 'keywords': ['social']},
-            {'aspect_name': 'tự_suy_ngẫm', 'keywords': ['self-reflection']},
-            {'aspect_name': 'căng_thẳng_tài_chính', 'keywords': ['financial stress']},
-            {'aspect_name': 'cô_đơn', 'keywords': ['loneliness']}
-        ]
 
-# Fetch data from Cassandra
-@st.cache_data(ttl=30)
-def fetch_recent_posts(_session, limit=100):
-    """Fetch recent classified posts"""
-    query = """
-    SELECT subreddit, hour_partition, created_utc, post_id, title, body,
-           aspect_sentiments, model_version, processed_ts
-    FROM classified_posts_by_hour
-    LIMIT %s
-    """
-    try:
-        rows = _session.execute(query, [limit])
-        # Convert Cassandra Row objects to dictionaries for serialization
-        return [
-            {
-                'subreddit': r.subreddit,
-                'hour_partition': r.hour_partition,
-                'created_utc': r.created_utc,
-                'post_id': r.post_id,
-                'title': r.title,
-                'body': r.body,
-                'aspect_sentiments': dict(r.aspect_sentiments) if r.aspect_sentiments else None,
-                'model_version': r.model_version,
-                'processed_ts': r.processed_ts
-            }
-            for r in rows
-        ]
-    except Exception as e:
-        st.error(f"Error fetching posts: {e}")
-        return []
+@st.cache_data(ttl=10)
+def fetch_recent_posts(_session, limit=50, hours_back=24):
+    """Fetch recent classified VOZ posts by scanning recent hour buckets"""
+    posts = []
+    now = datetime.utcnow()
 
-@st.cache_data(ttl=60)
-def fetch_posts_by_timerange(_session, hours_back=24):
-    """Fetch posts from last N hours"""
-    # Note: This is a simplified query. In production, you'd filter by partition
-    query = """
-    SELECT subreddit, hour_partition, created_utc, post_id, title, body,
-           aspect_sentiments, model_version, processed_ts
-    FROM classified_posts_by_hour
-    LIMIT 1000
-    """
-    try:
-        rows = _session.execute(query)
+    # Query each hour bucket for the last N hours
+    for i in range(hours_back):
+        hour_bucket = (now - timedelta(hours=i)).strftime("%Y-%m-%d-%H")
+        query = """
+        SELECT hour_bucket, classified_at, post_id, text, url, source,
+               aspects, aspect_probs, confidence, stress_label, reasoning,
+               gender, age_group, occupation, relationship,
+               model_version, processing_time_ms
+        FROM voz_classified_posts
+        WHERE hour_bucket = %s
+        LIMIT %s
+        """
+        try:
+            rows = _session.execute(query, [hour_bucket, limit])
+            for r in rows:
+                posts.append({
+                    "hour_bucket": r.hour_bucket,
+                    "classified_at": r.classified_at,
+                    "post_id": r.post_id,
+                    "text": r.text,
+                    "url": r.url,
+                    "aspects": list(r.aspects) if r.aspects else [],
+                    "confidence": r.confidence or 0.0,
+                    "stress_label": r.stress_label,
+                    "reasoning": r.reasoning,
+                    "gender": r.gender or "unknown",
+                    "age_group": r.age_group or "unknown",
+                    "occupation": r.occupation or "unknown",
+                    "relationship": r.relationship or "unknown",
+                    "model_version": r.model_version,
+                    "processing_time_ms": r.processing_time_ms or 0,
+                })
+            if len(posts) >= limit:
+                break
+        except Exception as e:
+            continue
 
-        # Filter by time in Python (since we can't efficiently filter in CQL without partition key)
-        cutoff = datetime.utcnow() - timedelta(hours=hours_back)
-        filtered = [r for r in rows if r.processed_ts and r.processed_ts >= cutoff]
+    return sorted(posts, key=lambda x: x["classified_at"] or datetime.min, reverse=True)[:limit]
 
-        # Convert Cassandra Row objects to dictionaries for serialization
-        return [
-            {
-                'subreddit': r.subreddit,
-                'hour_partition': r.hour_partition,
-                'created_utc': r.created_utc,
-                'post_id': r.post_id,
-                'title': r.title,
-                'body': r.body,
-                'aspect_sentiments': dict(r.aspect_sentiments) if r.aspect_sentiments else None,
-                'model_version': r.model_version,
-                'processed_ts': r.processed_ts
-            }
-            for r in filtered
-        ]
-    except Exception as e:
-        st.error(f"Error fetching posts: {e}")
-        return []
 
-def process_aspect_statistics(posts):
-    """Calculate aspect sentiment statistics"""
-    aspect_counts = defaultdict(lambda: {'positive': 0, 'negative': 0, 'total': 0})
-
+def compute_aspect_stats(posts):
+    """Compute aspect distribution statistics"""
+    aspect_counts = defaultdict(int)
     for post in posts:
-        if post['aspect_sentiments']:
-            for aspect, sentiment in post['aspect_sentiments'].items():
-                aspect_counts[aspect]['total'] += 1
-                if sentiment > 0:
-                    aspect_counts[aspect]['positive'] += 1
-                elif sentiment < 0:
-                    aspect_counts[aspect]['negative'] += 1
-
+        for aspect_id in post.get("aspects", []):
+            aspect_counts[aspect_id] += 1
     return aspect_counts
 
-# Main app
+
+def compute_demographic_stats(posts, field):
+    """Compute demographic distribution"""
+    counts = defaultdict(int)
+    for post in posts:
+        value = post.get(field, "unknown")
+        counts[value] += 1
+    return counts
+
+
+def compute_demographic_stress_stats(posts, field):
+    """Compute demographic distribution with stress breakdown"""
+    stats = defaultdict(lambda: {"total": 0, "stress": 0, "non_stress": 0})
+    for post in posts:
+        value = post.get(field, "unknown")
+        stats[value]["total"] += 1
+        if post.get("stress_label"):
+            stats[value]["stress"] += 1
+        else:
+            stats[value]["non_stress"] += 1
+    return stats
+
+
+def compute_demographic_aspect_stats(posts, field):
+    """Compute which aspects each demographic group stresses about (only stressed posts)"""
+    stats = defaultdict(lambda: defaultdict(int))
+    totals = defaultdict(int)
+    for post in posts:
+        if post.get("stress_label"):  # Only count stressed posts
+            value = post.get(field, "unknown")
+            totals[value] += 1
+            for aspect_id in post.get("aspects", []):
+                if 0 <= aspect_id < 10:
+                    stats[value][aspect_id] += 1
+    return stats, totals
+
+
+def compute_cooccurrence_matrix(posts):
+    """Compute 10x10 aspect co-occurrence matrix"""
+    matrix = np.zeros((10, 10))
+    for post in posts:
+        aspects = post.get("aspects", [])
+        for i in aspects:
+            for j in aspects:
+                if 0 <= i < 10 and 0 <= j < 10:
+                    matrix[i][j] += 1
+    return matrix
+
+
+def render_post_card(post, idx):
+    """Render a single post card with aspects and demographics"""
+    with st.container():
+        # Header with stress badge
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            stress_badge = "🔴 STRESS" if post["stress_label"] else "🟢 OK"
+            st.markdown(f"**#{idx + 1}** {stress_badge}")
+        with col2:
+            if post["classified_at"]:
+                st.caption(post["classified_at"].strftime("%H:%M:%S"))
+
+        # Text preview
+        text = post.get("text", "")[:300]
+        st.markdown(f"_{text}{'...' if len(post.get('text', '')) > 300 else ''}_")
+
+        # Aspect chips
+        aspects = post.get("aspects", [])
+        if aspects:
+            chips_html = " ".join([
+                f'<span style="background-color:{ASPECT_COLORS.get(a, "#999")};color:white;padding:2px 8px;border-radius:12px;margin:2px;font-size:12px;">{ASPECT_NAMES.get(a, f"Aspect {a}")}</span>'
+                for a in aspects
+            ])
+            st.markdown(chips_html, unsafe_allow_html=True)
+
+        # Demographics row
+        demo_parts = []
+        if post["gender"] != "unknown":
+            demo_parts.append(GENDER_LABELS.get(post["gender"], post["gender"]))
+        if post["age_group"] != "unknown":
+            demo_parts.append(AGE_LABELS.get(post["age_group"], post["age_group"]))
+        if post["occupation"] != "unknown":
+            demo_parts.append(OCCUPATION_LABELS.get(post["occupation"], post["occupation"]))
+        if post["relationship"] != "unknown":
+            demo_parts.append(RELATIONSHIP_LABELS.get(post["relationship"], post["relationship"]))
+
+        if demo_parts:
+            st.caption(" | ".join(demo_parts))
+
+        # Reasoning (expandable)
+        if post.get("reasoning"):
+            with st.expander("LLM Reasoning"):
+                st.write(post["reasoning"])
+
+        st.divider()
+
+
 def main():
-    st.title("🧠 Vietnamese Mental Health ABSA Dashboard")
-    st.markdown("Real-time Aspect-Based Sentiment Analysis for Reddit Posts")
+    st.title("🧠 Vietnamese Stress Detection Dashboard")
+    st.markdown("Real-time analysis of VOZ.vn posts with LLM-based stress detection and demographics")
 
     # Sidebar
-    st.sidebar.header("Configuration")
+    st.sidebar.header("⚙️ Settings")
 
-    # Time range selector
-    time_range = st.sidebar.selectbox(
-        "Time Range",
-        ["Last Hour", "Last 6 Hours", "Last 24 Hours", "Last 100 Posts"],
-        index=2
+    # Auto-refresh interval selection
+    refresh_interval = st.sidebar.selectbox(
+        "Auto-refresh",
+        options=[0, 5, 10, 30],
+        index=2,
+        format_func=lambda x: "Off" if x == 0 else f"Every {x}s"
     )
 
-    # Refresh rate
-    auto_refresh = st.sidebar.checkbox("Auto-refresh (30s)", value=False)
+    # Auto-refresh component (smooth, no gray overlay)
+    if refresh_interval > 0:
+        st_autorefresh(interval=refresh_interval * 1000, limit=None, key="data_refresh")
 
-    if auto_refresh:
-        st.sidebar.info("Auto-refreshing every 30 seconds...")
-        time.sleep(30)
-        st.rerun()
-
-    # Manual refresh button
+    # Manual refresh
     if st.sidebar.button("🔄 Refresh Now"):
         st.cache_data.clear()
         st.rerun()
 
+    # Filters
+    st.sidebar.header("🔍 Filters")
+
+    filter_stress = st.sidebar.selectbox(
+        "Stress Status",
+        ["All", "Stress Only", "Non-Stress Only"]
+    )
+
+    filter_aspects = st.sidebar.multiselect(
+        "Aspects",
+        options=list(range(10)),
+        format_func=lambda x: ASPECT_NAMES.get(x, f"Aspect {x}")
+    )
+
+    filter_gender = st.sidebar.selectbox(
+        "Gender",
+        ["All", "nam", "nữ", "unknown"],
+        format_func=lambda x: GENDER_LABELS.get(x, x) if x != "All" else "All"
+    )
+
+    filter_occupation = st.sidebar.selectbox(
+        "Occupation",
+        ["All"] + list(OCCUPATION_LABELS.keys()),
+        format_func=lambda x: OCCUPATION_LABELS.get(x, x) if x != "All" else "All"
+    )
+
     # Connect to Cassandra
     session = get_cassandra_session()
     if not session:
-        st.error("Cannot connect to Cassandra. Please check the connection.")
+        st.error("Cannot connect to database. Please check Cassandra is running.")
+        st.info("Run: `docker-compose up -d cassandra`")
         return
 
-    aspects = load_aspects()
-
-    # Fetch data based on time range
+    # Fetch data
     with st.spinner("Loading data..."):
-        if time_range == "Last 100 Posts":
-            posts = fetch_recent_posts(session, limit=100)
-        else:
-            hours = {
-                "Last Hour": 1,
-                "Last 6 Hours": 6,
-                "Last 24 Hours": 24
-            }[time_range]
-            posts = fetch_posts_by_timerange(session, hours_back=hours)
+        posts = fetch_recent_posts(session, limit=200)
 
     if not posts:
-        st.warning("No data available yet. Please wait for posts to be processed.")
+        st.warning("No data yet. Start the pipeline:")
+        st.code("""
+# 1. Initialize Kafka topic
+./scripts/init-kafka-topics.sh
+
+# 2. Start VOZ producer
+python producers/voz_kafka_producer.py --target 50
+
+# 3. Start Spark streaming (in Docker)
+docker exec -it reddit-spark-master spark-submit /opt/spark-apps/voz_streaming_pipeline.py
+        """)
         return
-
-    # Calculate statistics
-    aspect_stats = process_aspect_statistics(posts)
-
-    # Display metrics
-    st.header("📊 Overview")
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric("Total Posts", len(posts))
-
-    with col2:
-        posts_with_sentiments = sum(1 for p in posts if p['aspect_sentiments'])
-        st.metric("Posts with Sentiments", posts_with_sentiments)
-
-    with col3:
-        total_aspects = sum(len(p['aspect_sentiments']) for p in posts if p['aspect_sentiments'])
-        st.metric("Total Aspects Detected", total_aspects)
-
-    with col4:
-        negative_posts = sum(
-            1 for p in posts
-            if p['aspect_sentiments'] and any(s < 0 for s in p['aspect_sentiments'].values())
-        )
-        st.metric("Posts with Stress", negative_posts)
-
-    # Aspect Statistics Charts
-    st.header("📈 Aspect-Based Sentiment Statistics")
-
-    if aspect_stats:
-        # Prepare data for charts
-        aspect_names = list(aspect_stats.keys())
-        positive_counts = [aspect_stats[a]['positive'] for a in aspect_names]
-        negative_counts = [aspect_stats[a]['negative'] for a in aspect_names]
-        total_counts = [aspect_stats[a]['total'] for a in aspect_names]
-
-        # Chart 1: Stacked Bar Chart (Positive vs Negative)
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("Sentiment Distribution by Aspect")
-            fig1 = go.Figure(data=[
-                go.Bar(name='Negative', x=aspect_names, y=negative_counts, marker_color='#ff4b4b'),
-                go.Bar(name='Positive', x=aspect_names, y=positive_counts, marker_color='#00cc66')
-            ])
-            fig1.update_layout(
-                barmode='stack',
-                xaxis_tickangle=-45,
-                height=400,
-                xaxis_title="Aspect",
-                yaxis_title="Count"
-            )
-            st.plotly_chart(fig1, use_container_width=True)
-
-        with col2:
-            st.subheader("Total Mentions per Aspect")
-            fig2 = px.bar(
-                x=aspect_names,
-                y=total_counts,
-                labels={'x': 'Aspect', 'y': 'Total Mentions'},
-                color=total_counts,
-                color_continuous_scale='Blues'
-            )
-            fig2.update_layout(
-                xaxis_tickangle=-45,
-                height=400,
-                showlegend=False
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-
-        # Chart 2: Sentiment Ratio
-        st.subheader("Negative Sentiment Ratio by Aspect")
-
-        ratios = []
-        for aspect in aspect_names:
-            total = aspect_stats[aspect]['total']
-            neg = aspect_stats[aspect]['negative']
-            ratio = (neg / total * 100) if total > 0 else 0
-            ratios.append(ratio)
-
-        fig3 = px.bar(
-            x=aspect_names,
-            y=ratios,
-            labels={'x': 'Aspect', 'y': 'Negative Sentiment (%)'},
-            color=ratios,
-            color_continuous_scale='Reds'
-        )
-        fig3.update_layout(
-            xaxis_tickangle=-45,
-            height=400
-        )
-        st.plotly_chart(fig3, use_container_width=True)
-
-        # Chart 3: Pie chart of total aspect distribution
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("Aspect Distribution")
-            fig4 = px.pie(
-                values=total_counts,
-                names=aspect_names,
-                hole=0.3
-            )
-            st.plotly_chart(fig4, use_container_width=True)
-
-        with col2:
-            st.subheader("Sentiment Balance")
-            total_positive = sum(positive_counts)
-            total_negative = sum(negative_counts)
-            fig5 = px.pie(
-                values=[total_positive, total_negative],
-                names=['Positive', 'Negative'],
-                color=['Positive', 'Negative'],
-                color_discrete_map={'Positive': '#00cc66', 'Negative': '#ff4b4b'}
-            )
-            st.plotly_chart(fig5, use_container_width=True)
-
-    else:
-        st.info("No aspect sentiments detected yet.")
-
-    # Recent Posts Table
-    st.header("📝 Recent Processed Posts")
-
-    # Filter options
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        filter_sentiment = st.selectbox(
-            "Filter by Sentiment",
-            ["All", "Negative Only", "Positive Only", "Neutral Only"]
-        )
-
-    with col2:
-        filter_aspect = st.selectbox(
-            "Filter by Aspect",
-            ["All"] + [a['aspect_name'] for a in aspects]
-        )
-
-    with col3:
-        show_body = st.checkbox("Show Post Body", value=False)
 
     # Apply filters
     filtered_posts = posts.copy()
 
-    if filter_sentiment == "Negative Only":
-        filtered_posts = [
-            p for p in filtered_posts
-            if p['aspect_sentiments'] and any(s < 0 for s in p['aspect_sentiments'].values())
-        ]
-    elif filter_sentiment == "Positive Only":
-        filtered_posts = [
-            p for p in filtered_posts
-            if p['aspect_sentiments'] and any(s > 0 for s in p['aspect_sentiments'].values())
-        ]
-    elif filter_sentiment == "Neutral Only":
-        filtered_posts = [p for p in filtered_posts if not p['aspect_sentiments']]
+    if filter_stress == "Stress Only":
+        filtered_posts = [p for p in filtered_posts if p["stress_label"]]
+    elif filter_stress == "Non-Stress Only":
+        filtered_posts = [p for p in filtered_posts if not p["stress_label"]]
 
-    if filter_aspect != "All":
-        filtered_posts = [
-            p for p in filtered_posts
-            if p['aspect_sentiments'] and filter_aspect in p['aspect_sentiments']
-        ]
+    if filter_aspects:
+        filtered_posts = [p for p in filtered_posts if any(a in p["aspects"] for a in filter_aspects)]
 
-    # Display posts
-    st.write(f"Showing {len(filtered_posts)} posts")
+    if filter_gender != "All":
+        filtered_posts = [p for p in filtered_posts if p["gender"] == filter_gender]
 
-    for i, post in enumerate(filtered_posts[:50]):  # Limit to 50 for performance
-        with st.expander(f"**{post['subreddit']}** - {post['title'] or '(No title)'}"):
-            col1, col2 = st.columns([3, 1])
+    if filter_occupation != "All":
+        filtered_posts = [p for p in filtered_posts if p["occupation"] == filter_occupation]
 
-            with col1:
-                st.write(f"**Post ID:** {post['post_id']}")
-                st.write(f"**Created:** {post['created_utc']}")
-                st.write(f"**Processed:** {post['processed_ts']}")
+    # Metrics row
+    st.header("📊 Overview")
+    col1, col2, col3, col4, col5 = st.columns(5)
 
-                if post['aspect_sentiments']:
-                    st.write("**Detected Aspects:**")
-                    for aspect, sentiment in post['aspect_sentiments'].items():
-                        sentiment_emoji = "😟" if sentiment < 0 else "😊" if sentiment > 0 else "😐"
-                        sentiment_text = "Negative" if sentiment < 0 else "Positive" if sentiment > 0 else "Neutral"
-                        st.write(f"  - {aspect}: {sentiment_emoji} {sentiment_text}")
-                else:
-                    st.write("**No aspects detected** (neutral post)")
+    with col1:
+        st.metric("Total Posts", len(posts))
+    with col2:
+        stress_count = sum(1 for p in posts if p["stress_label"])
+        st.metric("Stress Posts", stress_count, delta=f"{stress_count/len(posts)*100:.1f}%" if posts else "0%")
+    with col3:
+        known_gender = sum(1 for p in posts if p["gender"] != "unknown")
+        st.metric("Known Gender", known_gender)
+    with col4:
+        avg_time = sum(p["processing_time_ms"] for p in posts) / len(posts) if posts else 0
+        st.metric("Avg LLM Time", f"{avg_time:.0f}ms")
+    with col5:
+        st.metric("Filtered", len(filtered_posts))
 
-                if show_body and post['body']:
-                    st.write("---")
-                    st.write(f"**Body:** {post['body'][:500]}{'...' if len(post['body']) > 500 else ''}")
+    # Charts
+    st.header("📈 Analytics")
 
-            with col2:
-                st.write(f"**Model:** {post['model_version'] or 'N/A'}")
-                st.write(f"**Hour:** {post['hour_partition']}")
+    tab1, tab2, tab3, tab4 = st.tabs(["Aspects", "Demographics", "Co-occurrence", "Timeline"])
+
+    with tab1:
+        col1, col2 = st.columns(2)
+
+        # Aspect distribution bar chart
+        aspect_stats = compute_aspect_stats(posts)
+        with col1:
+            st.subheader("Aspect Distribution")
+            if aspect_stats:
+                df = pd.DataFrame([
+                    {"Aspect": ASPECT_NAMES[i], "Count": aspect_stats.get(i, 0), "Color": ASPECT_COLORS[i]}
+                    for i in range(10)
+                ])
+                fig = px.bar(df, x="Aspect", y="Count", color="Aspect",
+                             color_discrete_map={ASPECT_NAMES[i]: ASPECT_COLORS[i] for i in range(10)})
+                fig.update_layout(showlegend=False, xaxis_tickangle=-45, height=400)
+                st.plotly_chart(fig, use_container_width=True)
+
+        # Aspect pie chart
+        with col2:
+            st.subheader("Aspect Share")
+            if aspect_stats:
+                df = pd.DataFrame([
+                    {"Aspect": ASPECT_NAMES[i], "Count": aspect_stats.get(i, 0)}
+                    for i in range(10) if aspect_stats.get(i, 0) > 0
+                ])
+                fig = px.pie(df, values="Count", names="Aspect", hole=0.4,
+                             color="Aspect",
+                             color_discrete_map={ASPECT_NAMES[i]: ASPECT_COLORS[i] for i in range(10)})
+                fig.update_layout(height=400)
+                st.plotly_chart(fig, use_container_width=True)
+
+    with tab2:
+        # Gender with Stress breakdown
+        st.subheader("Gender × Stress Analysis")
+        col1, col2 = st.columns(2)
+
+        gender_stress = compute_demographic_stress_stats(posts, "gender")
+        with col1:
+            if gender_stress:
+                df = pd.DataFrame([
+                    {"Gender": GENDER_LABELS.get(k, k), "Stress %": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Non-Stress %": v["non_stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
+                    for k, v in gender_stress.items() if v["total"] > 0
+                ])
+                fig = go.Figure()
+                fig.add_trace(go.Bar(name="Stress", x=df["Gender"], y=df["Stress %"], marker_color="#e74c3c", text=df["Stress %"].apply(lambda x: f"{x:.1f}%"), textposition="inside"))
+                fig.add_trace(go.Bar(name="Non-Stress", x=df["Gender"], y=df["Non-Stress %"], marker_color="#2ecc71", text=df["Non-Stress %"].apply(lambda x: f"{x:.1f}%"), textposition="inside"))
+                fig.update_layout(barmode="stack", height=350, title="Gender Distribution by Stress (%)", yaxis_title="%")
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            if gender_stress:
+                df = pd.DataFrame([
+                    {"Gender": GENDER_LABELS.get(k, k), "Stress Rate": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
+                    for k, v in gender_stress.items() if v["total"] > 0
+                ])
+                fig = px.bar(df, x="Gender", y="Stress Rate", color="Stress Rate",
+                             color_continuous_scale="Reds", text=df.apply(lambda r: f"{r['Stress Rate']:.1f}% (n={r['Total']})", axis=1))
+                fig.update_layout(height=350, title="Stress Rate by Gender", yaxis_title="Stress %")
+                fig.update_traces(textposition="outside")
+                st.plotly_chart(fig, use_container_width=True)
+
+        # Occupation with Stress breakdown
+        st.subheader("Occupation × Stress Analysis")
+        col3, col4 = st.columns(2)
+
+        occupation_stress = compute_demographic_stress_stats(posts, "occupation")
+        with col3:
+            if occupation_stress:
+                df = pd.DataFrame([
+                    {"Occupation": OCCUPATION_LABELS.get(k, k), "Stress %": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Non-Stress %": v["non_stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
+                    for k, v in occupation_stress.items() if v["total"] > 0
+                ])
+                fig = go.Figure()
+                fig.add_trace(go.Bar(name="Stress", x=df["Occupation"], y=df["Stress %"], marker_color="#e74c3c", text=df["Stress %"].apply(lambda x: f"{x:.1f}%"), textposition="inside"))
+                fig.add_trace(go.Bar(name="Non-Stress", x=df["Occupation"], y=df["Non-Stress %"], marker_color="#2ecc71", text=df["Non-Stress %"].apply(lambda x: f"{x:.1f}%"), textposition="inside"))
+                fig.update_layout(barmode="stack", height=350, xaxis_tickangle=-45, title="Occupation by Stress (%)", yaxis_title="%")
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col4:
+            if occupation_stress:
+                df = pd.DataFrame([
+                    {"Occupation": OCCUPATION_LABELS.get(k, k), "Stress Rate": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
+                    for k, v in occupation_stress.items() if v["total"] > 0
+                ]).sort_values("Stress Rate", ascending=False)
+                fig = px.bar(df, x="Occupation", y="Stress Rate", color="Stress Rate",
+                             color_continuous_scale="Reds", text=df.apply(lambda r: f"{r['Stress Rate']:.1f}% (n={r['Total']})", axis=1))
+                fig.update_layout(height=350, xaxis_tickangle=-45, title="Stress Rate by Occupation", yaxis_title="Stress %")
+                fig.update_traces(textposition="outside")
+                st.plotly_chart(fig, use_container_width=True)
+
+        # Age with Stress breakdown
+        st.subheader("Age Group × Stress Analysis")
+        col5, col6 = st.columns(2)
+
+        age_stress = compute_demographic_stress_stats(posts, "age_group")
+        with col5:
+            if age_stress:
+                df = pd.DataFrame([
+                    {"Age": AGE_LABELS.get(k, k), "Stress %": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Non-Stress %": v["non_stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
+                    for k, v in age_stress.items() if v["total"] > 0
+                ])
+                fig = go.Figure()
+                fig.add_trace(go.Bar(name="Stress", x=df["Age"], y=df["Stress %"], marker_color="#e74c3c", text=df["Stress %"].apply(lambda x: f"{x:.1f}%"), textposition="inside"))
+                fig.add_trace(go.Bar(name="Non-Stress", x=df["Age"], y=df["Non-Stress %"], marker_color="#2ecc71", text=df["Non-Stress %"].apply(lambda x: f"{x:.1f}%"), textposition="inside"))
+                fig.update_layout(barmode="stack", height=350, title="Age Group by Stress (%)", yaxis_title="%")
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col6:
+            if age_stress:
+                df = pd.DataFrame([
+                    {"Age": AGE_LABELS.get(k, k), "Stress Rate": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
+                    for k, v in age_stress.items() if v["total"] > 0
+                ])
+                fig = px.bar(df, x="Age", y="Stress Rate", color="Stress Rate",
+                             color_continuous_scale="Reds", text=df.apply(lambda r: f"{r['Stress Rate']:.1f}% (n={r['Total']})", axis=1))
+                fig.update_layout(height=350, title="Stress Rate by Age Group", yaxis_title="Stress %")
+                fig.update_traces(textposition="outside")
+                st.plotly_chart(fig, use_container_width=True)
+
+        # Relationship with Stress breakdown
+        st.subheader("Relationship × Stress Analysis")
+        col7, col8 = st.columns(2)
+
+        rel_stress = compute_demographic_stress_stats(posts, "relationship")
+        with col7:
+            if rel_stress:
+                df = pd.DataFrame([
+                    {"Status": RELATIONSHIP_LABELS.get(k, k),
+                     "Stress %": v["stress"]/v["total"]*100 if v["total"] > 0 else 0,
+                     "Non-Stress %": v["non_stress"]/v["total"]*100 if v["total"] > 0 else 0,
+                     "Stress": v["stress"], "Non-Stress": v["non_stress"], "Total": v["total"]}
+                    for k, v in rel_stress.items() if v["total"] > 0
+                ])
+                fig = go.Figure()
+                fig.add_trace(go.Bar(name="Stress", x=df["Status"], y=df["Stress %"], marker_color="#e74c3c",
+                                     text=df.apply(lambda r: f"{r['Stress %']:.1f}%", axis=1), textposition="inside"))
+                fig.add_trace(go.Bar(name="Non-Stress", x=df["Status"], y=df["Non-Stress %"], marker_color="#2ecc71",
+                                     text=df.apply(lambda r: f"{r['Non-Stress %']:.1f}%", axis=1), textposition="inside"))
+                fig.update_layout(barmode="stack", height=350, title="Relationship Status by Stress (%)", yaxis_title="Percentage")
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col8:
+            if rel_stress:
+                df = pd.DataFrame([
+                    {"Status": RELATIONSHIP_LABELS.get(k, k), "Stress Rate": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
+                    for k, v in rel_stress.items() if v["total"] > 0
+                ])
+                fig = px.bar(df, x="Status", y="Stress Rate", color="Stress Rate",
+                             color_continuous_scale="Reds", text=df.apply(lambda r: f"{r['Stress Rate']:.1f}% (n={r['Total']})", axis=1))
+                fig.update_layout(height=350, title="Stress Rate by Relationship", yaxis_title="Stress %")
+                fig.update_traces(textposition="outside")
+                st.plotly_chart(fig, use_container_width=True)
+
+        # What each group stresses about
+        st.markdown("---")
+        st.subheader("🎯 What Each Group Stresses About")
+        st.caption("Shows the top stress aspects for each demographic group (% of stressed posts mentioning each aspect)")
+
+        demo_tab1, demo_tab2, demo_tab3, demo_tab4 = st.tabs(["By Gender", "By Age", "By Occupation", "By Relationship"])
+
+        with demo_tab1:
+            gender_aspects, gender_totals = compute_demographic_aspect_stats(posts, "gender")
+            if gender_aspects:
+                rows = []
+                for group, aspects in gender_aspects.items():
+                    total = gender_totals[group]
+                    if total > 0:
+                        for asp_id, count in aspects.items():
+                            rows.append({
+                                "Group": GENDER_LABELS.get(group, group),
+                                "Aspect": ASPECT_NAMES[asp_id],
+                                "Percentage": count / total * 100,
+                                "Count": count
+                            })
+                if rows:
+                    df = pd.DataFrame(rows)
+                    fig = px.bar(df, x="Group", y="Percentage", color="Aspect",
+                                 color_discrete_map={ASPECT_NAMES[i]: ASPECT_COLORS[i] for i in range(10)},
+                                 text=df["Percentage"].apply(lambda x: f"{x:.1f}%"),
+                                 barmode="group")
+                    fig.update_layout(height=400, title="Stress Aspects by Gender", yaxis_title="% of Stressed Posts")
+                    fig.update_traces(textposition="outside")
+                    st.plotly_chart(fig, use_container_width=True)
+
+        with demo_tab2:
+            age_aspects, age_totals = compute_demographic_aspect_stats(posts, "age_group")
+            if age_aspects:
+                rows = []
+                for group, aspects in age_aspects.items():
+                    total = age_totals[group]
+                    if total > 0:
+                        for asp_id, count in aspects.items():
+                            rows.append({
+                                "Group": AGE_LABELS.get(group, group),
+                                "Aspect": ASPECT_NAMES[asp_id],
+                                "Percentage": count / total * 100,
+                                "Count": count
+                            })
+                if rows:
+                    df = pd.DataFrame(rows)
+                    fig = px.bar(df, x="Group", y="Percentage", color="Aspect",
+                                 color_discrete_map={ASPECT_NAMES[i]: ASPECT_COLORS[i] for i in range(10)},
+                                 text=df["Percentage"].apply(lambda x: f"{x:.1f}%"),
+                                 barmode="group")
+                    fig.update_layout(height=400, title="Stress Aspects by Age Group", yaxis_title="% of Stressed Posts")
+                    fig.update_traces(textposition="outside")
+                    st.plotly_chart(fig, use_container_width=True)
+
+        with demo_tab3:
+            occ_aspects, occ_totals = compute_demographic_aspect_stats(posts, "occupation")
+            if occ_aspects:
+                rows = []
+                for group, aspects in occ_aspects.items():
+                    total = occ_totals[group]
+                    if total > 0:
+                        for asp_id, count in aspects.items():
+                            rows.append({
+                                "Group": OCCUPATION_LABELS.get(group, group),
+                                "Aspect": ASPECT_NAMES[asp_id],
+                                "Percentage": count / total * 100,
+                                "Count": count
+                            })
+                if rows:
+                    df = pd.DataFrame(rows)
+                    fig = px.bar(df, x="Group", y="Percentage", color="Aspect",
+                                 color_discrete_map={ASPECT_NAMES[i]: ASPECT_COLORS[i] for i in range(10)},
+                                 text=df["Percentage"].apply(lambda x: f"{x:.1f}%"),
+                                 barmode="group")
+                    fig.update_layout(height=400, xaxis_tickangle=-45, title="Stress Aspects by Occupation", yaxis_title="% of Stressed Posts")
+                    fig.update_traces(textposition="outside")
+                    st.plotly_chart(fig, use_container_width=True)
+
+        with demo_tab4:
+            rel_aspects, rel_totals = compute_demographic_aspect_stats(posts, "relationship")
+            if rel_aspects:
+                rows = []
+                for group, aspects in rel_aspects.items():
+                    total = rel_totals[group]
+                    if total > 0:
+                        for asp_id, count in aspects.items():
+                            rows.append({
+                                "Group": RELATIONSHIP_LABELS.get(group, group),
+                                "Aspect": ASPECT_NAMES[asp_id],
+                                "Percentage": count / total * 100,
+                                "Count": count
+                            })
+                if rows:
+                    df = pd.DataFrame(rows)
+                    fig = px.bar(df, x="Group", y="Percentage", color="Aspect",
+                                 color_discrete_map={ASPECT_NAMES[i]: ASPECT_COLORS[i] for i in range(10)},
+                                 text=df["Percentage"].apply(lambda x: f"{x:.1f}%"),
+                                 barmode="group")
+                    fig.update_layout(height=400, title="Stress Aspects by Relationship Status", yaxis_title="% of Stressed Posts")
+                    fig.update_traces(textposition="outside")
+                    st.plotly_chart(fig, use_container_width=True)
+
+    with tab3:
+        st.subheader("Aspect Co-occurrence Heatmap")
+        matrix = compute_cooccurrence_matrix(posts)
+        if matrix.sum() > 0:
+            labels = [ASPECTS[i]["name_vi"] for i in range(10)]
+            fig = go.Figure(data=go.Heatmap(
+                z=matrix,
+                x=labels,
+                y=labels,
+                colorscale="RdBu",
+                text=matrix.astype(int),
+                texttemplate="%{text}",
+                textfont={"size": 10},
+            ))
+            fig.update_layout(height=500, xaxis_tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Not enough data for co-occurrence analysis")
+
+    with tab4:
+        st.subheader("Posts Timeline (by hour)")
+        if posts:
+            # Group by hour
+            hour_counts = defaultdict(lambda: {"total": 0, "stress": 0})
+            for p in posts:
+                if p["classified_at"]:
+                    hour = p["classified_at"].strftime("%Y-%m-%d %H:00")
+                    hour_counts[hour]["total"] += 1
+                    if p["stress_label"]:
+                        hour_counts[hour]["stress"] += 1
+
+            if hour_counts:
+                df = pd.DataFrame([
+                    {"Hour": k, "Total": v["total"], "Stress": v["stress"]}
+                    for k, v in sorted(hour_counts.items())
+                ])
+                fig = go.Figure()
+                fig.add_trace(go.Bar(x=df["Hour"], y=df["Total"], name="Total", marker_color="#3498db"))
+                fig.add_trace(go.Bar(x=df["Hour"], y=df["Stress"], name="Stress", marker_color="#e74c3c"))
+                fig.update_layout(barmode="overlay", height=400)
+                st.plotly_chart(fig, use_container_width=True)
+
+    # Post feed
+    st.header(f"📝 Recent Posts ({len(filtered_posts)} shown)")
+
+    for idx, post in enumerate(filtered_posts[:30]):
+        render_post_card(post, idx)
 
     # Footer
     st.markdown("---")
-    st.markdown(f"**Last updated:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
-    st.markdown("**Data source:** Cassandra `reddit_rt.classified_posts_by_hour`")
+    st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Data source: Cassandra `reddit_rt.voz_classified_posts`")
+
 
 if __name__ == "__main__":
     main()

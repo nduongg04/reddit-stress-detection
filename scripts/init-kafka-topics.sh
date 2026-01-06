@@ -53,6 +53,11 @@ create_topic "reddit.posts.raw.v1" 6 1 604800000
 # Retention: 7 days (604800000 ms)
 create_topic "reddit.posts.dlq.v1" 3 1 604800000
 
+# Create VOZ posts topic for Vietnamese stress detection
+# Partitions: 4 for parallel LLM inference
+# Retention: 7 days (604800000 ms)
+create_topic "voz.posts.raw.v1" 4 1 604800000
+
 echo "==================================="
 echo "Listing all topics:"
 echo "==================================="

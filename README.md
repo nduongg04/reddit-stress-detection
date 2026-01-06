@@ -237,6 +237,7 @@ If producer shows `DNS lookup failed for kafka:9092`:
 | File | Description |
 |------|-------------|
 | `run.sh` | Start entire pipeline |
+| `scripts/voz_crawler.py` | VOZ.vn forum crawler |
 | `train_vietnamese_stress.sh` | Train Vietnamese PhoBERT model |
 | `test_vietnamese_model.sh` | Test model accuracy |
 | `spark/kafka_to_cassandra_with_ml.py` | Real-time ML pipeline |
@@ -245,6 +246,23 @@ If producer shows `DNS lookup failed for kafka:9092`:
 | `scripts/export_vietnamese_from_cassandra.py` | Export Vietnamese posts |
 | `ml/dataset/label_vietnamese_with_ollama.py` | Automated labeling |
 | `producers/reddit_producer/config/config.yaml` | Rate limiting & settings |
+
+## VOZ.vn Data Collection
+
+Collect Vietnamese posts from VOZ.vn tam-su forum:
+
+```bash
+# Collect 12,000 posts (default)
+python scripts/voz_crawler.py
+
+# Custom target with faster delay
+python scripts/voz_crawler.py --target 5000 --delay 0.5
+
+# Reset checkpoint and start fresh
+python scripts/voz_crawler.py --reset
+```
+
+Output: `data/raw/voz_posts_v1.jsonl`
 
 ---
 

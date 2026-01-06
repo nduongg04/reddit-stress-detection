@@ -1,0 +1,151 @@
+{
+  "test_samples": 80,
+  "global_metrics": {
+    "micro_f1": 0.3194444444444444,
+    "macro_f1": 0.15943800943800945,
+    "hamming_loss": 0.3675,
+    "exact_match": 0.0375
+  },
+  "per_aspect_metrics": [
+    {
+      "aspect_id": 0,
+      "aspect_name": "Occupational",
+      "precision": 0.8667,
+      "recall": 0.619,
+      "f1": 0.7222,
+      "support": 63,
+      "fnr": 0.381,
+      "tp": 39,
+      "fp": 6,
+      "fn": 24,
+      "tn": 11
+    },
+    {
+      "aspect_id": 1,
+      "aspect_name": "Financial",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 40,
+      "fnr": 1.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 40,
+      "tn": 40
+    },
+    {
+      "aspect_id": 2,
+      "aspect_name": "Academic",
+      "precision": 0.7083,
+      "recall": 0.34,
+      "f1": 0.4595,
+      "support": 50,
+      "fnr": 0.66,
+      "tp": 17,
+      "fp": 7,
+      "fn": 33,
+      "tn": 23
+    },
+    {
+      "aspect_id": 3,
+      "aspect_name": "Familial",
+      "precision": 0.9286,
+      "recall": 0.2653,
+      "f1": 0.4127,
+      "support": 49,
+      "fnr": 0.7347,
+      "tp": 13,
+      "fp": 1,
+      "fn": 36,
+      "tn": 30
+    },
+    {
+      "aspect_id": 4,
+      "aspect_name": "Health",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 46,
+      "fnr": 1.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 46,
+      "tn": 34
+    },
+    {
+      "aspect_id": 5,
+      "aspect_name": "Romantic",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 38,
+      "fnr": 1.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 38,
+      "tn": 42
+    },
+    {
+      "aspect_id": 6,
+      "aspect_name": "Existential",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 19,
+      "fnr": 1.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 19,
+      "tn": 61
+    },
+    {
+      "aspect_id": 7,
+      "aspect_name": "Social",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 15,
+      "fnr": 1.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 15,
+      "tn": 65
+    },
+    {
+      "aspect_id": 8,
+      "aspect_name": "Life Events",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 16,
+      "fnr": 1.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 16,
+      "tn": 64
+    },
+    {
+      "aspect_id": 9,
+      "aspect_name": "Self Image",
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 13,
+      "fnr": 1.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 13,
+      "tn": 67
+    }
+  ],
+  "targets": {
+    "micro_f1": 0.75,
+    "macro_f1": 0.7,
+    "exact_match": 0.5
+  },
+  "high_risk_fnr_thresholds": {
+    "Health": 0.2,
+    "Existential": 0.25,
+    "Life Events": 0.2
+  }
+}
