@@ -1,0 +1,15 @@
+{
+  "aspects": [
+    {"id": 0, "name": "occupational", "vi": "Công việc", "description": "Work-related stress, job pressure, career concerns"},
+    {"id": 1, "name": "self_image", "vi": "Hình ảnh bản thân", "description": "Self-esteem, body image, identity issues"},
+    {"id": 2, "name": "health", "vi": "Sức khỏe", "description": "Physical and mental health concerns"},
+    {"id": 3, "name": "academic", "vi": "Học tập", "description": "School, study, exam pressure"},
+    {"id": 4, "name": "romantic", "vi": "Tình cảm", "description": "Love, dating, romantic relationship issues"},
+    {"id": 5, "name": "familial", "vi": "Gia đình", "description": "Family conflicts, parental pressure"},
+    {"id": 6, "name": "financial", "vi": "Tài chính", "description": "Money problems, debt, financial insecurity"},
+    {"id": 7, "name": "life_events", "vi": "Sự kiện", "description": "Major life changes, loss, trauma"},
+    {"id": 8, "name": "existential", "vi": "Hiện sinh", "description": "Meaning of life, future uncertainty, loneliness"}
+  ],
+  "version": "1.0",
+  "num_aspects": 9
+}

@@ -1,0 +1,18 @@
+early_stopping:
+  min_delta: 0.001
+  monitor: val_f1_macro
+  patience: 3
+model:
+  dropout: 0.3
+  max_length: 256
+  name: vinai/phobert-base
+  num_aspects: 9
+thresholds:
+  default: 0.5
+training:
+  batch_size: 16
+  epochs: 10
+  gradient_accumulation: 2
+  learning_rate: 2.0e-05
+  warmup_ratio: 0.1
+  weight_decay: 0.01

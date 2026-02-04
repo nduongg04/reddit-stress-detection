@@ -1,0 +1,8 @@
+{
+  "total_raw": 12165,
+  "removed_empty": 4,
+  "removed_short": 231,
+  "removed_long": 561,
+  "removed_duplicates": 3,
+  "after_cleaning": 11366
+}

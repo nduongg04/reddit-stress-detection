@@ -1,312 +1,144 @@
 #!/usr/bin/env python3
-"""
-Data Cleaning Pipeline for VOZ.vn Posts
+"""Clean VOZ posts for training: normalize, filter, deduplicate."""
 
-Sprint 2: Clean and deduplicate raw posts before LLM labeling.
-- Token length filtering (20-300 tokens using underthesea)
-- Semantic deduplication (MiniLM embeddings, cosine similarity ≥0.90)
-
-Usage:
-    python scripts/data_cleaning.py [--from-cassandra] [--output OUTPUT]
-"""
-
-import argparse
 import json
-import logging
-import os
+import re
+import argparse
+import hashlib
+import unicodedata
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any
 
-import numpy as np
-from pyvi import ViTokenizer
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
+# Cleaning patterns
+HTML_ENTITIES = re.compile(r'&[a-zA-Z]+;|&#\d+;')
+URLS = re.compile(r'https?://\S+|www\.\S+')
+EMAILS = re.compile(r'\S+@\S+\.\S+')
+PHONE_NUMBERS = re.compile(r'(\+84|0)\d{9,10}')
+MULTIPLE_SPACES = re.compile(r'\s+')
+SPECIAL_CHARS = re.compile(r'[^\w\s.,!?;:\-\'\"àáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđÀÁẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÈÉẺẼẸÊẾỀỂỄỆÌÍỈĨỊÒÓỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÙÚỦŨỤƯỨỪỬỮỰỲÝỶỸỴĐ]')
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+MIN_LENGTH = 50
+MAX_LENGTH = 2000
 
-# Constants
-MIN_TOKENS = 20
-MAX_TOKENS = 300
-SIMILARITY_THRESHOLD = 0.90
-EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
-EMBEDDING_DIM = 384
+def normalize_unicode(text: str) -> str:
+    """Normalize Vietnamese unicode to NFC form."""
+    return unicodedata.normalize('NFC', text)
 
-# Cassandra settings
-CASSANDRA_HOST = "localhost"
-CASSANDRA_PORT = 9042
-CASSANDRA_KEYSPACE = "reddit_rt"
-CASSANDRA_TABLE = "voz_raw_posts"
+def clean_text(text: str) -> str:
+    """Apply all cleaning transformations."""
+    if not text:
+        return ""
 
+    # Normalize unicode first
+    text = normalize_unicode(text)
 
-def count_tokens(text: str) -> int:
-    """Count tokens using pyvi Vietnamese tokenizer."""
-    tokenized = ViTokenizer.tokenize(text)
-    tokens = tokenized.split()
-    return len(tokens)
+    # Remove HTML entities
+    text = HTML_ENTITIES.sub(' ', text)
 
+    # Remove URLs
+    text = URLS.sub(' ', text)
 
-def load_posts_from_cassandra() -> List[Dict[str, Any]]:
-    """Load posts from Cassandra table."""
-    from cassandra.cluster import Cluster
+    # Remove emails
+    text = EMAILS.sub(' ', text)
 
-    logger.info(f"Connecting to Cassandra at {CASSANDRA_HOST}:{CASSANDRA_PORT}...")
-    cluster = Cluster([CASSANDRA_HOST], port=CASSANDRA_PORT)
-    session = cluster.connect(CASSANDRA_KEYSPACE)
+    # Remove phone numbers
+    text = PHONE_NUMBERS.sub(' ', text)
 
-    query = f"SELECT post_id, text, timestamp, source, url FROM {CASSANDRA_TABLE}"
-    logger.info(f"Executing query: {query}")
+    # Remove special characters but keep Vietnamese
+    text = SPECIAL_CHARS.sub(' ', text)
 
-    rows = session.execute(query)
-    posts = []
-    for row in rows:
-        posts.append({
-            "post_id": row.post_id,
-            "text": row.text,
-            "timestamp": row.timestamp.isoformat() if row.timestamp else None,
-            "source": row.source,
-            "url": row.url
-        })
+    # Collapse multiple whitespace
+    text = MULTIPLE_SPACES.sub(' ', text)
 
-    cluster.shutdown()
-    logger.info(f"Loaded {len(posts)} posts from Cassandra")
-    return posts
+    return text.strip()
 
+def compute_hash(text: str) -> str:
+    """Compute SHA256 hash of text for deduplication."""
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]
 
-def load_posts_from_jsonl(input_path: str) -> List[Dict[str, Any]]:
-    """Load posts from JSONL file."""
-    posts = []
-    with open(input_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                posts.append(json.loads(line))
-    logger.info(f"Loaded {len(posts)} posts from {input_path}")
-    return posts
+def clean_dataset(input_path: str, output_path: str, stats_path: str = None):
+    """Clean entire dataset with filtering and deduplication."""
+    seen_hashes = set()
+    stats = {
+        "total_raw": 0,
+        "removed_empty": 0,
+        "removed_short": 0,
+        "removed_long": 0,
+        "removed_duplicates": 0,
+        "after_cleaning": 0
+    }
 
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-def filter_by_token_length(posts: List[Dict[str, Any]]) -> tuple:
-    """Filter posts by token count (20-300 tokens)."""
-    filtered = []
-    removed_count = 0
+    with open(input_path, "r", encoding="utf-8") as fin, \
+         open(output_path, "w", encoding="utf-8") as fout:
 
-    for i, post in enumerate(posts):
-        text = post.get("text", "")
-        token_count = count_tokens(text)
+        for line in fin:
+            stats["total_raw"] += 1
 
-        if MIN_TOKENS <= token_count <= MAX_TOKENS:
-            post["token_count"] = token_count
-            filtered.append(post)
-        else:
-            removed_count += 1
-
-        if (i + 1) % 1000 == 0:
-            logger.info(f"Token filter progress: {i + 1}/{len(posts)} posts processed")
-
-    logger.info(f"Token filter: kept {len(filtered)}, removed {removed_count}")
-    return filtered, removed_count
-
-
-def generate_embeddings(posts: List[Dict[str, Any]], model: SentenceTransformer) -> np.ndarray:
-    """Generate embeddings for all posts."""
-    texts = [post.get("text", "") for post in posts]
-    logger.info(f"Generating embeddings for {len(texts)} posts...")
-
-    embeddings = model.encode(
-        texts,
-        batch_size=32,
-        show_progress_bar=True,
-        convert_to_numpy=True,
-        normalize_embeddings=True  # Normalize for cosine similarity
-    )
-
-    logger.info(f"Generated embeddings with shape {embeddings.shape}")
-    return embeddings
-
-
-def deduplicate_posts(
-    posts: List[Dict[str, Any]],
-    embeddings: np.ndarray,
-    threshold: float = SIMILARITY_THRESHOLD
-) -> tuple:
-    """Remove semantic duplicates using sklearn cosine similarity."""
-    n_posts = len(posts)
-    logger.info(f"Deduplicating {n_posts} posts with threshold {threshold}...")
-
-    # Track which posts to keep (start with all)
-    keep_mask = np.ones(n_posts, dtype=bool)
-
-    # Parse timestamps for comparison
-    def parse_timestamp(post):
-        ts = post.get("timestamp")
-        if ts is None:
-            return datetime.max
-        if isinstance(ts, (int, float)):
-            return datetime.fromtimestamp(ts)
-        try:
-            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        except:
-            return datetime.max
-
-    timestamps = [parse_timestamp(p) for p in posts]
-
-    # Compute cosine similarity in batches to avoid memory issues
-    batch_size = 500
-    logger.info(f"Computing similarity in batches of {batch_size}...")
-
-    for i in range(0, n_posts, batch_size):
-        batch_end = min(i + batch_size, n_posts)
-        if i % 1000 == 0:
-            logger.info(f"Dedup progress: {i}/{n_posts} posts processed")
-
-        # Compute similarity between this batch and all posts
-        batch_embeddings = embeddings[i:batch_end]
-        similarities = cosine_similarity(batch_embeddings, embeddings)
-
-        for batch_idx, global_i in enumerate(range(i, batch_end)):
-            if not keep_mask[global_i]:
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
                 continue
 
-            # Only check posts after this one to avoid double processing
-            for j in range(global_i + 1, n_posts):
-                if not keep_mask[j]:
-                    continue
+            text = record.get("text", "")
+            cleaned = clean_text(text)
 
-                sim = similarities[batch_idx, j]
-                if sim >= threshold:
-                    # Keep the one with earlier timestamp
-                    if timestamps[global_i] <= timestamps[j]:
-                        keep_mask[j] = False
-                    else:
-                        keep_mask[global_i] = False
-                        break
+            # Filter empty
+            if not cleaned:
+                stats["removed_empty"] += 1
+                continue
 
-    # Filter posts
-    deduplicated = [p for p, keep in zip(posts, keep_mask) if keep]
-    removed_count = n_posts - len(deduplicated)
+            # Filter by length
+            char_count = len(cleaned)
+            if char_count < MIN_LENGTH:
+                stats["removed_short"] += 1
+                continue
+            if char_count > MAX_LENGTH:
+                stats["removed_long"] += 1
+                continue
 
-    logger.info(f"Deduplication: kept {len(deduplicated)}, removed {removed_count}")
-    return deduplicated, removed_count
+            # Deduplicate
+            text_hash = compute_hash(cleaned)
+            if text_hash in seen_hashes:
+                stats["removed_duplicates"] += 1
+                continue
+            seen_hashes.add(text_hash)
 
+            # Write cleaned record
+            output_record = {
+                "post_id": record.get("post_id"),
+                "text": cleaned,
+                "text_hash": text_hash,
+                "char_count": char_count,
+                "cleaned_at": datetime.utcnow().isoformat() + "Z"
+            }
+            fout.write(json.dumps(output_record, ensure_ascii=False) + "\n")
+            stats["after_cleaning"] += 1
 
-def save_posts(posts: List[Dict[str, Any]], output_path: str):
-    """Save posts to JSONL file."""
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            if stats["after_cleaning"] % 1000 == 0:
+                print(f"Cleaned {stats['after_cleaning']} posts...")
 
-    with open(output_path, "w", encoding="utf-8") as f:
-        for post in posts:
-            # Remove temporary token_count field if present
-            post_copy = {k: v for k, v in post.items() if k != "token_count"}
-            f.write(json.dumps(post_copy, ensure_ascii=False) + "\n")
+    # Save stats
+    if stats_path:
+        with open(stats_path, "w", encoding="utf-8") as f:
+            json.dump(stats, f, indent=2)
 
-    logger.info(f"Saved {len(posts)} posts to {output_path}")
+    print(f"\nCleaning Stats:")
+    print(f"  Total raw: {stats['total_raw']}")
+    print(f"  Removed empty: {stats['removed_empty']}")
+    print(f"  Removed short (<{MIN_LENGTH}): {stats['removed_short']}")
+    print(f"  Removed long (>{MAX_LENGTH}): {stats['removed_long']}")
+    print(f"  Removed duplicates: {stats['removed_duplicates']}")
+    print(f"  After cleaning: {stats['after_cleaning']}")
 
-
-def save_statistics(stats: Dict[str, Any], output_path: str):
-    """Save cleaning statistics to JSON file."""
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(stats, f, indent=2, ensure_ascii=False)
-
-    logger.info(f"Saved statistics to {output_path}")
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Clean and deduplicate VOZ posts")
-    parser.add_argument(
-        "--from-cassandra",
-        action="store_true",
-        default=True,
-        help="Load data from Cassandra (default: True)"
-    )
-    parser.add_argument(
-        "--input",
-        default="data/raw/voz_posts_v1.jsonl",
-        help="Input JSONL file path (used if --from-cassandra is False)"
-    )
-    parser.add_argument(
-        "--output",
-        default="data/cleaned/voz_posts_cleaned_v1.jsonl",
-        help="Output JSONL file path"
-    )
-    parser.add_argument(
-        "--stats",
-        default="reports/cleaning_stats_v1.json",
-        help="Statistics output file path"
-    )
-    args = parser.parse_args()
-
-    # Load posts
-    if args.from_cassandra:
-        logger.info("Loading posts from Cassandra...")
-        posts = load_posts_from_cassandra()
-        input_source = f"cassandra://{CASSANDRA_HOST}:{CASSANDRA_PORT}/{CASSANDRA_KEYSPACE}.{CASSANDRA_TABLE}"
-    else:
-        if not os.path.exists(args.input):
-            logger.error(f"Input file not found: {args.input}")
-            return 1
-        posts = load_posts_from_jsonl(args.input)
-        input_source = args.input
-
-    original_count = len(posts)
-
-    # Step 1: Token length filtering
-    logger.info("Step 1: Token length filtering (20-300 tokens)...")
-    posts, removed_by_length = filter_by_token_length(posts)
-
-    # Step 2: Generate embeddings
-    logger.info(f"Step 2: Loading embedding model {EMBEDDING_MODEL}...")
-    model = SentenceTransformer(EMBEDDING_MODEL)
-    embeddings = generate_embeddings(posts, model)
-
-    # Step 3: Semantic deduplication
-    logger.info("Step 3: Semantic deduplication (cosine similarity ≥0.90)...")
-    posts, removed_by_duplicate = deduplicate_posts(posts, embeddings)
-
-    # Step 4: Save cleaned posts
-    logger.info("Step 4: Saving cleaned posts...")
-    save_posts(posts, args.output)
-
-    # Step 5: Generate statistics
-    final_count = len(posts)
-    removal_rate = 1 - (final_count / original_count) if original_count > 0 else 0
-
-    stats = {
-        "original_count": original_count,
-        "removed_by_length": removed_by_length,
-        "removed_by_duplicate": removed_by_duplicate,
-        "final_count": final_count,
-        "removal_rate": round(removal_rate, 4),
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "input_source": input_source,
-        "output_file": args.output,
-        "config": {
-            "min_tokens": MIN_TOKENS,
-            "max_tokens": MAX_TOKENS,
-            "similarity_threshold": SIMILARITY_THRESHOLD,
-            "embedding_model": EMBEDDING_MODEL
-        }
-    }
-    save_statistics(stats, args.stats)
-
-    # Summary
-    logger.info("=" * 50)
-    logger.info("Data Cleaning Complete!")
-    logger.info(f"  Original posts: {original_count}")
-    logger.info(f"  Removed by length: {removed_by_length}")
-    logger.info(f"  Removed by duplicate: {removed_by_duplicate}")
-    logger.info(f"  Final posts: {final_count}")
-    logger.info(f"  Removal rate: {removal_rate:.1%}")
-    logger.info("=" * 50)
-
-    return 0
-
+    return stats
 
 if __name__ == "__main__":
-    exit(main())
+    parser = argparse.ArgumentParser(description="Clean VOZ posts")
+    parser.add_argument("--input", "-i", default="data/raw/voz_exported.jsonl")
+    parser.add_argument("--output", "-o", default="data/cleaned/voz_cleaned.jsonl")
+    parser.add_argument("--stats", "-s", default="data/cleaned/cleaning_stats.json")
+    args = parser.parse_args()
+
+    clean_dataset(args.input, args.output, args.stats)

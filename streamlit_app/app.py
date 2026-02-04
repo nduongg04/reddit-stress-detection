@@ -38,33 +38,40 @@ ASPECTS = [
 ASPECT_COLORS = {a["id"]: a["color"] for a in ASPECTS}
 ASPECT_NAMES = {a["id"]: f"{a['name_vi']} ({a['name_en']})" for a in ASPECTS}
 
-# Demographics labels
-GENDER_LABELS = {"nam": "Nam 👨", "nữ": "Nữ 👩", "unknown": "Không rõ ❓"}
+# Demographics labels - Note: Current PhoBERT model only predicts stress aspects, not demographics
+# Demographics will show as "unknown" until LLM inference is added
+GENDER_LABELS = {"nam": "Nam", "nữ": "Nữ", "unknown": "Không rõ", None: "Không rõ", "": "Không rõ"}
 AGE_LABELS = {
     "teen": "13-17 tuổi",
     "young_adult": "18-25 tuổi",
     "adult": "26-40 tuổi",
     "middle_aged": "41-60 tuổi",
     "senior": "60+ tuổi",
-    "unknown": "Không rõ"
+    "unknown": "Không rõ",
+    None: "Không rõ",
+    "": "Không rõ"
 }
 OCCUPATION_LABELS = {
-    "student": "Học sinh/Sinh viên 📚",
-    "office_worker": "Nhân viên văn phòng 💼",
-    "it_engineer": "IT/Kỹ sư 💻",
-    "healthcare": "Y tế 🏥",
-    "teacher": "Giáo viên 👨‍🏫",
-    "blue_collar": "Công nhân 🔧",
-    "freelance": "Tự do 🎨",
-    "unemployed": "Thất nghiệp 😔",
-    "unknown": "Không rõ ❓"
+    "student": "Học sinh/Sinh viên",
+    "office_worker": "Nhân viên văn phòng",
+    "it_engineer": "IT/Kỹ sư",
+    "healthcare": "Y tế",
+    "teacher": "Giáo viên",
+    "blue_collar": "Công nhân",
+    "freelance": "Tự do",
+    "unemployed": "Thất nghiệp",
+    "unknown": "Không rõ",
+    None: "Không rõ",
+    "": "Không rõ"
 }
 RELATIONSHIP_LABELS = {
-    "single": "Độc thân 💔",
-    "dating": "Đang hẹn hò 💕",
-    "married": "Đã kết hôn 💍",
-    "divorced": "Ly hôn 💔",
-    "unknown": "Không rõ ❓"
+    "single": "Độc thân",
+    "dating": "Đang hẹn hò",
+    "married": "Đã kết hôn",
+    "divorced": "Ly hôn",
+    "unknown": "Không rõ",
+    None: "Không rõ",
+    "": "Không rõ"
 }
 
 
@@ -192,50 +199,58 @@ def compute_cooccurrence_matrix(posts):
 
 
 def render_post_card(post, idx):
-    """Render a single post card with aspects and demographics"""
-    with st.container():
-        # Header with stress badge
-        col1, col2 = st.columns([4, 1])
-        with col1:
-            stress_badge = "🔴 STRESS" if post["stress_label"] else "🟢 OK"
-            st.markdown(f"**#{idx + 1}** {stress_badge}")
-        with col2:
-            if post["classified_at"]:
-                st.caption(post["classified_at"].strftime("%H:%M:%S"))
+    """Render a single post card with collapsible full content"""
+    # Build header with stress badge and time
+    stress_badge = "🔴" if post["stress_label"] else "🟢"
+    time_str = post["classified_at"].strftime("%H:%M") if post["classified_at"] else ""
 
-        # Text preview
-        text = post.get("text", "")[:300]
-        st.markdown(f"_{text}{'...' if len(post.get('text', '')) > 300 else ''}_")
+    # Aspect chips for header
+    aspects = post.get("aspects", [])
+    aspect_names = [ASPECTS[a]["name_vi"] for a in aspects if 0 <= a < 10]
+    aspects_str = ", ".join(aspect_names[:3]) if aspect_names else "No stress detected"
+    if len(aspect_names) > 3:
+        aspects_str += f" +{len(aspect_names) - 3}"
 
-        # Aspect chips
-        aspects = post.get("aspects", [])
+    # Text preview (first 100 chars)
+    full_text = post.get("text", "")
+    preview_text = full_text[:100] + "..." if len(full_text) > 100 else full_text
+
+    # Create expander with summary as header
+    header = f"{stress_badge} **#{idx + 1}** {preview_text}"
+
+    with st.expander(header, expanded=False):
+        # Full text
+        st.markdown("**Full Text:**")
+        st.markdown(f"_{full_text}_")
+
+        st.markdown("---")
+
+        # Aspect chips with colors
         if aspects:
+            st.markdown("**Stress Aspects:**")
             chips_html = " ".join([
-                f'<span style="background-color:{ASPECT_COLORS.get(a, "#999")};color:white;padding:2px 8px;border-radius:12px;margin:2px;font-size:12px;">{ASPECT_NAMES.get(a, f"Aspect {a}")}</span>'
-                for a in aspects
+                f'<span style="background-color:{ASPECT_COLORS.get(a, "#999")};color:white;padding:4px 12px;border-radius:12px;margin:2px;font-size:13px;">{ASPECT_NAMES.get(a, f"Aspect {a}")}</span>'
+                for a in aspects if 0 <= a < 10
             ])
             st.markdown(chips_html, unsafe_allow_html=True)
+        else:
+            st.markdown("**Stress Aspects:** None detected")
 
-        # Demographics row
-        demo_parts = []
-        if post["gender"] != "unknown":
-            demo_parts.append(GENDER_LABELS.get(post["gender"], post["gender"]))
-        if post["age_group"] != "unknown":
-            demo_parts.append(AGE_LABELS.get(post["age_group"], post["age_group"]))
-        if post["occupation"] != "unknown":
-            demo_parts.append(OCCUPATION_LABELS.get(post["occupation"], post["occupation"]))
-        if post["relationship"] != "unknown":
-            demo_parts.append(RELATIONSHIP_LABELS.get(post["relationship"], post["relationship"]))
+        # Confidence
+        conf = post.get("confidence", 0)
+        if conf > 0:
+            st.markdown(f"**Confidence:** {conf*100:.1f}%")
 
-        if demo_parts:
-            st.caption(" | ".join(demo_parts))
-
-        # Reasoning (expandable)
-        if post.get("reasoning"):
-            with st.expander("LLM Reasoning"):
-                st.write(post["reasoning"])
-
-        st.divider()
+        # Metadata
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.caption(f"Post ID: {post['post_id']}")
+            st.caption(f"Model: {post.get('model_version', 'N/A')}")
+        with col2:
+            st.caption(f"Time: {time_str}")
+            if post.get("url"):
+                st.caption(f"[View on VOZ]({post['url']})")
 
 
 def main():
@@ -385,129 +400,7 @@ docker exec -it reddit-spark-master spark-submit /opt/spark-apps/voz_streaming_p
                 st.plotly_chart(fig, use_container_width=True)
 
     with tab2:
-        # Gender with Stress breakdown
-        st.subheader("Gender × Stress Analysis")
-        col1, col2 = st.columns(2)
-
-        gender_stress = compute_demographic_stress_stats(posts, "gender")
-        with col1:
-            if gender_stress:
-                df = pd.DataFrame([
-                    {"Gender": GENDER_LABELS.get(k, k), "Stress %": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Non-Stress %": v["non_stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
-                    for k, v in gender_stress.items() if v["total"] > 0
-                ])
-                fig = go.Figure()
-                fig.add_trace(go.Bar(name="Stress", x=df["Gender"], y=df["Stress %"], marker_color="#e74c3c", text=df["Stress %"].apply(lambda x: f"{x:.1f}%"), textposition="inside"))
-                fig.add_trace(go.Bar(name="Non-Stress", x=df["Gender"], y=df["Non-Stress %"], marker_color="#2ecc71", text=df["Non-Stress %"].apply(lambda x: f"{x:.1f}%"), textposition="inside"))
-                fig.update_layout(barmode="stack", height=350, title="Gender Distribution by Stress (%)", yaxis_title="%")
-                st.plotly_chart(fig, use_container_width=True)
-
-        with col2:
-            if gender_stress:
-                df = pd.DataFrame([
-                    {"Gender": GENDER_LABELS.get(k, k), "Stress Rate": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
-                    for k, v in gender_stress.items() if v["total"] > 0
-                ])
-                fig = px.bar(df, x="Gender", y="Stress Rate", color="Stress Rate",
-                             color_continuous_scale="Reds", text=df.apply(lambda r: f"{r['Stress Rate']:.1f}% (n={r['Total']})", axis=1))
-                fig.update_layout(height=350, title="Stress Rate by Gender", yaxis_title="Stress %")
-                fig.update_traces(textposition="outside")
-                st.plotly_chart(fig, use_container_width=True)
-
-        # Occupation with Stress breakdown
-        st.subheader("Occupation × Stress Analysis")
-        col3, col4 = st.columns(2)
-
-        occupation_stress = compute_demographic_stress_stats(posts, "occupation")
-        with col3:
-            if occupation_stress:
-                df = pd.DataFrame([
-                    {"Occupation": OCCUPATION_LABELS.get(k, k), "Stress %": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Non-Stress %": v["non_stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
-                    for k, v in occupation_stress.items() if v["total"] > 0
-                ])
-                fig = go.Figure()
-                fig.add_trace(go.Bar(name="Stress", x=df["Occupation"], y=df["Stress %"], marker_color="#e74c3c", text=df["Stress %"].apply(lambda x: f"{x:.1f}%"), textposition="inside"))
-                fig.add_trace(go.Bar(name="Non-Stress", x=df["Occupation"], y=df["Non-Stress %"], marker_color="#2ecc71", text=df["Non-Stress %"].apply(lambda x: f"{x:.1f}%"), textposition="inside"))
-                fig.update_layout(barmode="stack", height=350, xaxis_tickangle=-45, title="Occupation by Stress (%)", yaxis_title="%")
-                st.plotly_chart(fig, use_container_width=True)
-
-        with col4:
-            if occupation_stress:
-                df = pd.DataFrame([
-                    {"Occupation": OCCUPATION_LABELS.get(k, k), "Stress Rate": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
-                    for k, v in occupation_stress.items() if v["total"] > 0
-                ]).sort_values("Stress Rate", ascending=False)
-                fig = px.bar(df, x="Occupation", y="Stress Rate", color="Stress Rate",
-                             color_continuous_scale="Reds", text=df.apply(lambda r: f"{r['Stress Rate']:.1f}% (n={r['Total']})", axis=1))
-                fig.update_layout(height=350, xaxis_tickangle=-45, title="Stress Rate by Occupation", yaxis_title="Stress %")
-                fig.update_traces(textposition="outside")
-                st.plotly_chart(fig, use_container_width=True)
-
-        # Age with Stress breakdown
-        st.subheader("Age Group × Stress Analysis")
-        col5, col6 = st.columns(2)
-
-        age_stress = compute_demographic_stress_stats(posts, "age_group")
-        with col5:
-            if age_stress:
-                df = pd.DataFrame([
-                    {"Age": AGE_LABELS.get(k, k), "Stress %": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Non-Stress %": v["non_stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
-                    for k, v in age_stress.items() if v["total"] > 0
-                ])
-                fig = go.Figure()
-                fig.add_trace(go.Bar(name="Stress", x=df["Age"], y=df["Stress %"], marker_color="#e74c3c", text=df["Stress %"].apply(lambda x: f"{x:.1f}%"), textposition="inside"))
-                fig.add_trace(go.Bar(name="Non-Stress", x=df["Age"], y=df["Non-Stress %"], marker_color="#2ecc71", text=df["Non-Stress %"].apply(lambda x: f"{x:.1f}%"), textposition="inside"))
-                fig.update_layout(barmode="stack", height=350, title="Age Group by Stress (%)", yaxis_title="%")
-                st.plotly_chart(fig, use_container_width=True)
-
-        with col6:
-            if age_stress:
-                df = pd.DataFrame([
-                    {"Age": AGE_LABELS.get(k, k), "Stress Rate": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
-                    for k, v in age_stress.items() if v["total"] > 0
-                ])
-                fig = px.bar(df, x="Age", y="Stress Rate", color="Stress Rate",
-                             color_continuous_scale="Reds", text=df.apply(lambda r: f"{r['Stress Rate']:.1f}% (n={r['Total']})", axis=1))
-                fig.update_layout(height=350, title="Stress Rate by Age Group", yaxis_title="Stress %")
-                fig.update_traces(textposition="outside")
-                st.plotly_chart(fig, use_container_width=True)
-
-        # Relationship with Stress breakdown
-        st.subheader("Relationship × Stress Analysis")
-        col7, col8 = st.columns(2)
-
-        rel_stress = compute_demographic_stress_stats(posts, "relationship")
-        with col7:
-            if rel_stress:
-                df = pd.DataFrame([
-                    {"Status": RELATIONSHIP_LABELS.get(k, k),
-                     "Stress %": v["stress"]/v["total"]*100 if v["total"] > 0 else 0,
-                     "Non-Stress %": v["non_stress"]/v["total"]*100 if v["total"] > 0 else 0,
-                     "Stress": v["stress"], "Non-Stress": v["non_stress"], "Total": v["total"]}
-                    for k, v in rel_stress.items() if v["total"] > 0
-                ])
-                fig = go.Figure()
-                fig.add_trace(go.Bar(name="Stress", x=df["Status"], y=df["Stress %"], marker_color="#e74c3c",
-                                     text=df.apply(lambda r: f"{r['Stress %']:.1f}%", axis=1), textposition="inside"))
-                fig.add_trace(go.Bar(name="Non-Stress", x=df["Status"], y=df["Non-Stress %"], marker_color="#2ecc71",
-                                     text=df.apply(lambda r: f"{r['Non-Stress %']:.1f}%", axis=1), textposition="inside"))
-                fig.update_layout(barmode="stack", height=350, title="Relationship Status by Stress (%)", yaxis_title="Percentage")
-                st.plotly_chart(fig, use_container_width=True)
-
-        with col8:
-            if rel_stress:
-                df = pd.DataFrame([
-                    {"Status": RELATIONSHIP_LABELS.get(k, k), "Stress Rate": v["stress"]/v["total"]*100 if v["total"] > 0 else 0, "Total": v["total"]}
-                    for k, v in rel_stress.items() if v["total"] > 0
-                ])
-                fig = px.bar(df, x="Status", y="Stress Rate", color="Stress Rate",
-                             color_continuous_scale="Reds", text=df.apply(lambda r: f"{r['Stress Rate']:.1f}% (n={r['Total']})", axis=1))
-                fig.update_layout(height=350, title="Stress Rate by Relationship", yaxis_title="Stress %")
-                fig.update_traces(textposition="outside")
-                st.plotly_chart(fig, use_container_width=True)
-
-        # What each group stresses about
-        st.markdown("---")
+        # What each group stresses about - Main focus of Demographics tab
         st.subheader("🎯 What Each Group Stresses About")
         st.caption("Shows the top stress aspects for each demographic group (% of stressed posts mentioning each aspect)")
 

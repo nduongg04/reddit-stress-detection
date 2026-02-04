@@ -111,21 +111,33 @@ services:
       timeout: 10s
       retries: 5
 
-  # Spark Master (with automatic streaming job submission)
+  # Spark Master (VOZ Stress Classifier)
   spark-master:
     build:
-      context: .
-      dockerfile: Dockerfile.spark
-    # image: reddit-spark-ml:latest
+      context: ./spark
+      dockerfile: Dockerfile
     hostname: spark-master
-    container_name: reddit-spark-master
+    container_name: voz-spark-master
     ports:
-      - "8081:8080"  # Spark Master UI
-      - "7077:7077"  # Spark Master port
-      - "4040:4040"  # Spark Application UI
+      - "8081:8080" # Spark Master UI
+      - "7077:7077" # Spark Master port
+      - "4040:4040" # Spark Application UI
     environment:
       - SPARK_MODE=master
       - SPARK_NO_DAEMONIZE=true
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=voz.posts.raw.v1
+      - CASSANDRA_HOST=cassandra
+      - CASSANDRA_KEYSPACE=reddit_rt
+      - MODEL_PATH=/opt/models/phobert_stress.onnx
+      - TOKENIZER_PATH=/opt/tokenizer
+      - MODEL_VERSION=phobert_v1
+      - OLLAMA_HOST=host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./ml/exports:/opt/models:ro
+      - ./ml/checkpoints/phobert_stress_v1/tokenizer:/opt/tokenizer:ro
     depends_on:
       kafka:
         condition: service_healthy
@@ -139,70 +151,31 @@ services:
       timeout: 5s
       retries: 5
 
-  # Spark Worker
-  spark-worker:
+  # VOZ Producer - Crawls VOZ.vn and pushes to Kafka
+  voz-producer:
     build:
-      context: .
-      dockerfile: Dockerfile.spark
-    # image: reddit-spark-ml:latest
-    hostname: spark-worker
-    container_name: reddit-spark-worker
-    depends_on:
-      spark-master:
-        condition: service_healthy
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=3G
-      - SPARK_WORKER_CORES=2
-      - SPARK_NO_DAEMONIZE=true
-    networks:
-      - reddit-network
-
-  # Reddit Producer
-  reddit-producer:
-    build:
-      context: ./producers/reddit_producer
+      context: ./producers/voz_producer
       dockerfile: Dockerfile
-    container_name: reddit-producer
+    container_name: voz-producer
     depends_on:
       kafka:
         condition: service_healthy
     environment:
-      REDDIT_CLIENT_ID: ${REDDIT_CLIENT_ID}
-      REDDIT_CLIENT_SECRET: ${REDDIT_CLIENT_SECRET}
-      REDDIT_USER_AGENT: ${REDDIT_USER_AGENT}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_TOPIC: voz.posts.raw.v1
+      TARGET_POSTS: ${VOZ_TARGET_POSTS:-100}
+      DELAY: ${VOZ_DELAY:-1.5}
+      CONTINUOUS: "true"
+      RESET: ${VOZ_RESET:-false}
     volumes:
-      - ./producers/reddit_producer/config:/app/config
-      - ./logs:/app/logs
+      - ./data/raw:/app/data/raw
     networks:
       - reddit-network
     restart: unless-stopped
+    profiles:
+      - crawl
 
-  # Grafana for visualization
-  grafana:
-    image: grafana/grafana:10.2.0
-    hostname: grafana
-    container_name: reddit-grafana
-    ports:
-      - "3000:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_INSTALL_PLUGINS: hadesarchitect-cassandra-datasource
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-    networks:
-      - reddit-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Airflow (PostgreSQL backend for Airflow)
+  # Airflow PostgreSQL Backend
   airflow-postgres:
     image: postgres:15
     hostname: airflow-postgres
@@ -220,14 +193,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    profiles:
+      - airflow
 
   # Airflow Webserver
   airflow-webserver:
-    image: apache/airflow:2.7.3
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
     hostname: airflow-webserver
     container_name: reddit-airflow-webserver
     depends_on:
       airflow-postgres:
+        condition: service_healthy
+      cassandra:
         condition: service_healthy
     ports:
       - "8082:8080"
@@ -235,18 +214,23 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
       AIRFLOW__CORE__FERNET_KEY: ""
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
       _AIRFLOW_DB_UPGRADE: "true"
       _AIRFLOW_WWW_USER_CREATE: "true"
       _AIRFLOW_WWW_USER_USERNAME: airflow
       _AIRFLOW_WWW_USER_PASSWORD: airflow
+      CASSANDRA_HOST: cassandra
+      OLLAMA_HOST: host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
-      - airflow-data:/opt/airflow
+      - ./ml:/opt/ml
+      - ./data:/opt/data
     command: webserver
     networks:
       - reddit-network
@@ -255,31 +239,44 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    profiles:
+      - airflow
 
   # Airflow Scheduler
   airflow-scheduler:
-    image: apache/airflow:2.7.3
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
     hostname: airflow-scheduler
     container_name: reddit-airflow-scheduler
     depends_on:
       airflow-postgres:
         condition: service_healthy
+      cassandra:
+        condition: service_healthy
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
       AIRFLOW__CORE__FERNET_KEY: ""
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      CASSANDRA_HOST: cassandra
+      OLLAMA_HOST: host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
-      - airflow-data:/opt/airflow
+      - ./ml:/opt/ml
+      - ./data:/opt/data
     command: scheduler
     networks:
       - reddit-network
+    profiles:
+      - airflow
 
-  # Streamlit Dashboard
+  # # Streamlit Dashboard
   streamlit:
     build:
       context: ./streamlit_app

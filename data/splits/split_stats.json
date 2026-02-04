@@ -1,0 +1,12 @@
+{
+  "total": 3568,
+  "train": 2851,
+  "val": 353,
+  "test": 364,
+  "ratios": {
+    "train": 0.8,
+    "val": 0.1,
+    "test": 0.1
+  },
+  "seed": 42
+}

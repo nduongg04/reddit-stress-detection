@@ -1,0 +1,51 @@
+{
+  "aspects": [
+    {
+      "id": 0,
+      "name": "occupational",
+      "vi": "Công việc"
+    },
+    {
+      "id": 1,
+      "name": "self_image",
+      "vi": "Hình ảnh bản thân"
+    },
+    {
+      "id": 2,
+      "name": "health",
+      "vi": "Sức khỏe"
+    },
+    {
+      "id": 3,
+      "name": "academic",
+      "vi": "Học tập"
+    },
+    {
+      "id": 4,
+      "name": "romantic",
+      "vi": "Tình cảm"
+    },
+    {
+      "id": 5,
+      "name": "familial",
+      "vi": "Gia đình"
+    },
+    {
+      "id": 6,
+      "name": "financial",
+      "vi": "Tài chính"
+    },
+    {
+      "id": 7,
+      "name": "life_events",
+      "vi": "Sự kiện"
+    },
+    {
+      "id": 8,
+      "name": "existential",
+      "vi": "Hiện sinh"
+    }
+  ],
+  "threshold": 0.5,
+  "max_length": 256
+}

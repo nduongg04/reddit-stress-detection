@@ -1,151 +1,146 @@
 {
-  "test_samples": 80,
-  "global_metrics": {
-    "micro_f1": 0.3194444444444444,
-    "macro_f1": 0.15943800943800945,
-    "hamming_loss": 0.3675,
-    "exact_match": 0.0375
+  "overall": {
+    "f1_macro": 0.4387513233554798,
+    "f1_micro": 0.5710627400768246,
+    "precision_macro": 0.6350556600006875,
+    "recall_macro": 0.36748742120709393,
+    "total_samples": 364,
+    "threshold": 0.5
   },
-  "per_aspect_metrics": [
-    {
-      "aspect_id": 0,
-      "aspect_name": "Occupational",
-      "precision": 0.8667,
-      "recall": 0.619,
-      "f1": 0.7222,
-      "support": 63,
-      "fnr": 0.381,
-      "tp": 39,
-      "fp": 6,
-      "fn": 24,
-      "tn": 11
+  "per_aspect": {
+    "occupational": {
+      "precision": 0.7065217391304348,
+      "recall": 0.5284552845528455,
+      "f1": 0.6046511627906976,
+      "support": 123
     },
-    {
-      "aspect_id": 1,
-      "aspect_name": "Financial",
+    "self_image": {
+      "precision": 0.5333333333333333,
+      "recall": 0.32,
+      "f1": 0.4,
+      "support": 25
+    },
+    "health": {
+      "precision": 0.69,
+      "recall": 0.7263157894736842,
+      "f1": 0.7076923076923077,
+      "support": 95
+    },
+    "academic": {
+      "precision": 0.875,
+      "recall": 0.45161290322580644,
+      "f1": 0.5957446808510638,
+      "support": 31
+    },
+    "romantic": {
+      "precision": 1.0,
+      "recall": 0.14285714285714285,
+      "f1": 0.25,
+      "support": 7
+    },
+    "familial": {
+      "precision": 0.7241379310344828,
+      "recall": 0.45652173913043476,
+      "f1": 0.56,
+      "support": 46
+    },
+    "financial": {
+      "precision": 0.6031746031746031,
+      "recall": 0.48717948717948717,
+      "f1": 0.5390070921985816,
+      "support": 78
+    },
+    "life_events": {
+      "precision": 0.5833333333333334,
+      "recall": 0.19444444444444445,
+      "f1": 0.2916666666666667,
+      "support": 36
+    },
+    "existential": {
       "precision": 0.0,
       "recall": 0.0,
       "f1": 0.0,
-      "support": 40,
-      "fnr": 1.0,
-      "tp": 0,
-      "fp": 0,
-      "fn": 40,
-      "tn": 40
-    },
-    {
-      "aspect_id": 2,
-      "aspect_name": "Academic",
-      "precision": 0.7083,
-      "recall": 0.34,
-      "f1": 0.4595,
-      "support": 50,
-      "fnr": 0.66,
-      "tp": 17,
-      "fp": 7,
-      "fn": 33,
-      "tn": 23
-    },
-    {
-      "aspect_id": 3,
-      "aspect_name": "Familial",
-      "precision": 0.9286,
-      "recall": 0.2653,
-      "f1": 0.4127,
-      "support": 49,
-      "fnr": 0.7347,
-      "tp": 13,
-      "fp": 1,
-      "fn": 36,
-      "tn": 30
-    },
-    {
-      "aspect_id": 4,
-      "aspect_name": "Health",
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1": 0.0,
-      "support": 46,
-      "fnr": 1.0,
-      "tp": 0,
-      "fp": 0,
-      "fn": 46,
-      "tn": 34
-    },
-    {
-      "aspect_id": 5,
-      "aspect_name": "Romantic",
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1": 0.0,
-      "support": 38,
-      "fnr": 1.0,
-      "tp": 0,
-      "fp": 0,
-      "fn": 38,
-      "tn": 42
-    },
-    {
-      "aspect_id": 6,
-      "aspect_name": "Existential",
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1": 0.0,
-      "support": 19,
-      "fnr": 1.0,
-      "tp": 0,
-      "fp": 0,
-      "fn": 19,
-      "tn": 61
-    },
-    {
-      "aspect_id": 7,
-      "aspect_name": "Social",
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1": 0.0,
-      "support": 15,
-      "fnr": 1.0,
-      "tp": 0,
-      "fp": 0,
-      "fn": 15,
-      "tn": 65
-    },
-    {
-      "aspect_id": 8,
-      "aspect_name": "Life Events",
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1": 0.0,
-      "support": 16,
-      "fnr": 1.0,
-      "tp": 0,
-      "fp": 0,
-      "fn": 16,
-      "tn": 64
-    },
-    {
-      "aspect_id": 9,
-      "aspect_name": "Self Image",
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1": 0.0,
-      "support": 13,
-      "fnr": 1.0,
-      "tp": 0,
-      "fp": 0,
-      "fn": 13,
-      "tn": 67
+      "support": 12
     }
-  ],
-  "targets": {
-    "micro_f1": 0.75,
-    "macro_f1": 0.7,
-    "exact_match": 0.5
   },
-  "high_risk_fnr_thresholds": {
-    "Health": 0.2,
-    "Existential": 0.25,
-    "Life Events": 0.2
+  "classification_report": {
+    "occupational": {
+      "precision": 0.7065217391304348,
+      "recall": 0.5284552845528455,
+      "f1-score": 0.6046511627906976,
+      "support": 123.0
+    },
+    "self_image": {
+      "precision": 0.5333333333333333,
+      "recall": 0.32,
+      "f1-score": 0.4,
+      "support": 25.0
+    },
+    "health": {
+      "precision": 0.69,
+      "recall": 0.7263157894736842,
+      "f1-score": 0.7076923076923077,
+      "support": 95.0
+    },
+    "academic": {
+      "precision": 0.875,
+      "recall": 0.45161290322580644,
+      "f1-score": 0.5957446808510638,
+      "support": 31.0
+    },
+    "romantic": {
+      "precision": 1.0,
+      "recall": 0.14285714285714285,
+      "f1-score": 0.25,
+      "support": 7.0
+    },
+    "familial": {
+      "precision": 0.7241379310344828,
+      "recall": 0.45652173913043476,
+      "f1-score": 0.56,
+      "support": 46.0
+    },
+    "financial": {
+      "precision": 0.6031746031746031,
+      "recall": 0.48717948717948717,
+      "f1-score": 0.5390070921985816,
+      "support": 78.0
+    },
+    "life_events": {
+      "precision": 0.5833333333333334,
+      "recall": 0.19444444444444445,
+      "f1-score": 0.2916666666666667,
+      "support": 36.0
+    },
+    "existential": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 12.0
+    },
+    "micro avg": {
+      "precision": 0.6798780487804879,
+      "recall": 0.4922737306843267,
+      "f1-score": 0.5710627400768246,
+      "support": 453.0
+    },
+    "macro avg": {
+      "precision": 0.6350556600006875,
+      "recall": 0.36748742120709393,
+      "f1-score": 0.4387513233554798,
+      "support": 453.0
+    },
+    "weighted avg": {
+      "precision": 0.665051812630424,
+      "recall": 0.4922737306843267,
+      "f1-score": 0.5521490078408331,
+      "support": 453.0
+    },
+    "samples avg": {
+      "precision": 0.46662087912087913,
+      "recall": 0.3912087912087912,
+      "f1-score": 0.40995334031048314,
+      "support": 453.0
+    }
   }
 }
