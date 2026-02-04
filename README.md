@@ -2,7 +2,7 @@
 
 ## Demo Video
 
-<video src="https://github.com/nduongg04/reddit-stress-detection/raw/main/demo/Screen%20Recording%202026-02-05%20at%2000.22.48.mov" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/e21e7b85-df43-4212-bcc0-7e2c5d32b4a4" controls width="100%"></video>
 
 ## Abstract
 
