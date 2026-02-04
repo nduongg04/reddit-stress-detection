@@ -2,9 +2,7 @@
 
 ## Demo Video
 
-https://github.com/nduongg04/reddit-stress-detection/blob/main/demo/Screen%20Recording%202026-02-05%20at%2000.22.48.mov
-
-> **Note**: If video doesn't play on GitHub, upload via: Issues → New Issue → drag video → copy URL
+<video src="https://github.com/nduongg04/reddit-stress-detection/raw/main/demo/Screen%20Recording%202026-02-05%20at%2000.22.48.mov" controls width="100%"></video>
 
 ## Abstract
 
