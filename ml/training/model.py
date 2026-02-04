@@ -9,9 +9,13 @@ class PhoBERTStressClassifier(nn.Module):
     """PhoBERT with classification head for multi-label stress detection."""
 
     def __init__(self, model_name: str = "vinai/phobert-base",
-                 num_aspects: int = 9, dropout: float = 0.3):
+                 num_aspects: int = 9, dropout: float = 0.3,
+                 gradient_checkpointing: bool = False):
         super().__init__()
         self.phobert = AutoModel.from_pretrained(model_name)
+        # Enable gradient checkpointing to reduce memory usage
+        if gradient_checkpointing:
+            self.phobert.gradient_checkpointing_enable()
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(self.phobert.config.hidden_size, num_aspects)
         self.num_aspects = num_aspects

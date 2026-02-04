@@ -1,0 +1,21 @@
+model:
+  name: vinai/phobert-base
+  num_aspects: 10
+  max_length: 128  # Reduced for memory efficiency
+  dropout: 0.3
+
+training:
+  batch_size: 2  # Very small batch for CPU training
+  epochs: 3
+  learning_rate: 0.00001  # Lower LR for fine-tuning
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  gradient_accumulation: 2  # Effective batch size = 4
+
+early_stopping:
+  patience: 3
+  min_delta: 0.001
+  monitor: val_f1_macro
+
+thresholds:
+  default: 0.5

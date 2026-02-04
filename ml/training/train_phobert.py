@@ -80,6 +80,11 @@ def train(config_path: str, train_path: str, val_path: str, output_dir: str):
     device = get_device()
     print(f"Using device: {device}")
 
+    # Memory optimization for CPU training
+    if device.type == "cpu":
+        torch.set_num_threads(2)  # Limit threads to prevent memory explosion
+        print("CPU mode: enabled memory optimizations")
+
     # Create output directory
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -102,12 +107,16 @@ def train(config_path: str, train_path: str, val_path: str, output_dir: str):
 
     print(f"Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}")
 
-    # Initialize model
+    # Initialize model with gradient checkpointing on CPU
     print("Initializing model...")
+    use_gradient_checkpointing = device.type == "cpu"
+    if use_gradient_checkpointing:
+        print("Enabling gradient checkpointing to reduce memory usage")
     model = PhoBERTStressClassifier(
         model_name=tokenizer_name,
         num_aspects=config["model"]["num_aspects"],
-        dropout=config["model"]["dropout"]
+        dropout=config["model"]["dropout"],
+        gradient_checkpointing=use_gradient_checkpointing
     ).to(device)
 
     # Loss, optimizer, scheduler
@@ -118,7 +127,13 @@ def train(config_path: str, train_path: str, val_path: str, output_dir: str):
         weight_decay=config["training"]["weight_decay"]
     )
 
-    num_training_steps = len(train_loader) * config["training"]["epochs"]
+    # Gradient accumulation
+    gradient_accumulation_steps = config["training"].get("gradient_accumulation", 1)
+
+    num_training_steps = (len(train_loader) // gradient_accumulation_steps) * config["training"]["epochs"]
+    # Ensure at least 1 step
+    num_training_steps = max(1, num_training_steps)
+
     scheduler = OneCycleLR(
         optimizer,
         max_lr=config["training"]["learning_rate"],
@@ -131,28 +146,33 @@ def train(config_path: str, train_path: str, val_path: str, output_dir: str):
     patience_counter = 0
     training_history = []
 
-    print("Starting training...")
+    print(f"Starting training... (gradient accumulation: {gradient_accumulation_steps})")
     for epoch in range(config["training"]["epochs"]):
         model.train()
         train_loss = 0
+        optimizer.zero_grad()
         progress = tqdm(train_loader, desc=f"Epoch {epoch+1}/{config['training']['epochs']}")
 
-        for batch in progress:
+        for batch_idx, batch in enumerate(progress):
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
             labels = batch["labels"].to(device)
 
-            optimizer.zero_grad()
             logits = model(input_ids, attention_mask)
             loss = criterion(logits, labels)
+            loss = loss / gradient_accumulation_steps
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-            scheduler.step()
+            train_loss += loss.item() * gradient_accumulation_steps
 
-            train_loss += loss.item()
-            progress.set_postfix({"loss": f"{loss.item():.4f}"})
+            # Update weights every gradient_accumulation_steps
+            if (batch_idx + 1) % gradient_accumulation_steps == 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad()
+
+            progress.set_postfix({"loss": f"{loss.item() * gradient_accumulation_steps:.4f}"})
 
         avg_train_loss = train_loss / len(train_loader)
 

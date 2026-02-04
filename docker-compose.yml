@@ -262,6 +262,9 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       CASSANDRA_HOST: cassandra
       OLLAMA_HOST: host.docker.internal:11434
+      # PyTorch memory optimization for CPU training
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -273,6 +276,12 @@ services:
     command: scheduler
     networks:
       - reddit-network
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
     profiles:
       - airflow
 
